@@ -1,0 +1,25 @@
+services:
+  free-proxy-manager:
+    build: .
+    container_name: free-proxy-manager
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/proxies.db
+      CHECKER_CONCURRENCY: 50
+      CHECK_TIMEOUT: 5
+      CHECK_URL: https://www.google.com/
+      COLLECT_INTERVAL: 900
+      RECHECK_INTERVAL: 300
+      CLEANUP_INTERVAL: 3600
+      SCORE_INTERVAL: 300
+      LOG_LEVEL: INFO
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
