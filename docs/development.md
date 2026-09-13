@@ -27,7 +27,7 @@ pip install -r requirements.txt
 cp .env.example .env
 mkdir -p data
 alembic upgrade head
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 9321
 ```
 
 For fast startup without blocking on the initial collection:
@@ -100,7 +100,7 @@ Ranking tweaks should be made there, without changing the checker.
 Enable tracemalloc in the app lifespan:
 
 ```bash
-TRACEMALLOC=1 TRACEMALLOC_INTERVAL=60 uvicorn app.main:app --host 0.0.0.0 --port 8000
+TRACEMALLOC=1 TRACEMALLOC_INTERVAL=60 uvicorn app.main:app --host 0.0.0.0 --port 9321
 ```
 
 See [Memory](memory.md) for tuning.

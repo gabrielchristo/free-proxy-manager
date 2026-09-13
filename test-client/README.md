@@ -1,13 +1,13 @@
-# test-client
+# Test Client
 
-Cliente Python para validar proxies do **free-proxy-manager** acessando uma URL externa (default: Google).
+Python client to validate **free-proxy-manager** proxies by fetching an external URL (default: Google).
 
-## O que faz
+## What it does
 
-1. **10×** `GET /proxy` — cada proxy retornado é testado contra a URL alvo.
-2. **1×** `GET /proxies` — busca até 100 candidatos `protocol=https`, `status=HEALTHY`, `anonymous=true`, ordena por nível de anonimidade (`elite` / `high_anonymous` > `anonymous`) e score, pega **10** e testa cada um.
+1. **10×** `GET /proxy` — each returned proxy is tested against the target URL.
+2. **1×** `GET /proxies` — fetches up to 100 candidates with `protocol=https`, `status=HEALTHY`, `anonymous=true`, ranks by anonymity (`elite` / `high_anonymous` > `anonymous`) and score, picks **10**, and tests each one.
 
-Total: **20 probes** com relatório individual (OK/FAIL, tempo, HTTP status, metadados).
+Total: **20 probes** with per-request reporting (OK/FAIL, timing, HTTP status, metadata).
 
 ## Setup
 
@@ -18,44 +18,44 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Certifique-se de que o **free-proxy-manager** está rodando (ex.: `http://localhost:8000`).
+Make sure **free-proxy-manager** is running (e.g. `http://localhost:9321`).
 
-## Uso
+## Usage
 
 ```bash
 python main.py
 ```
 
-Opções úteis:
+Useful options:
 
 ```bash
-python main.py --manager-url http://localhost:8000 --target-url https://www.google.com/
+python main.py --manager-url http://localhost:9321 --target-url https://www.google.com/
 python main.py --json report.json
 python main.py --concurrency 3 --timeout 20
 ```
 
-Variáveis de ambiente:
+Environment variables:
 
-| Variável | Default |
+| Variable | Default |
 |----------|---------|
-| `PROXY_MANAGER_URL` | `http://localhost:8000` |
+| `PROXY_MANAGER_URL` | `http://localhost:9321` |
 | `TEST_TARGET_URL` | `https://www.google.com/` |
 | `TEST_TIMEOUT` | `15` |
 
-## Saída
+## Output
 
-Relatório no terminal com **diagnóstico do pool** antes dos testes (`/health`, contagem por status, quantos batem no filtro da lista).
+Terminal report with **pool diagnostics** before tests (`/health`, counts by status, how many match the list filter).
 
-Se não houver proxies `HEALTHY`, os 10 slots de `/proxies` viram **1 linha SKIP** (não 10 repetidas).
+If there are no `HEALTHY` proxies, the 10 `/proxies` slots become **one SKIP line** (not 10 duplicates).
 
-### Pool vazio / checker ainda aquecendo
+### Empty pool / checker still warming up
 
-`/proxy` só devolve `HEALTHY`. Se o checker ainda não validou ninguém:
+`/proxy` only returns `HEALTHY` proxies. If the checker has not validated any yet:
 
 ```bash
 python main.py --wait-seconds 300
 ```
 
-Aguarda até aparecer pelo menos 1 `HEALTHY` (poll a cada 5s).
+Waits until at least one `HEALTHY` proxy appears (poll every 5s).
 
-Exit codes: `0` = todos os testes executados passaram; `1` = algum falhou; `2` = nenhum teste executado.
+Exit codes: `0` = all executed tests passed; `1` = at least one failed; `2` = no tests executed.

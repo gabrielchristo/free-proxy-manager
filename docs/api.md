@@ -1,8 +1,8 @@
 # API
 
-Local base URL: `http://localhost:8000`
+Local base URL: `http://localhost:9321`
 
-Interactive OpenAPI: `http://localhost:8000/docs`
+Interactive OpenAPI: `http://localhost:9321/docs`
 
 Authentication: **none** (local use).
 

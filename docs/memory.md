@@ -83,7 +83,7 @@ Short spikes above 400 MB during the **first collection** are normal; average sh
 Compare RSS with Python heap when debugging:
 
 ```bash
-TRACEMALLOC=1 TRACEMALLOC_INTERVAL=300 uvicorn app.main:app --host 0.0.0.0 --port 8000
+TRACEMALLOC=1 TRACEMALLOC_INTERVAL=300 uvicorn app.main:app --host 0.0.0.0 --port 9321
 ```
 
 Stable `tracemalloc current` with rising RSS usually means native memory (SQLite cache, OpenSSL) rather than a Python leak.
