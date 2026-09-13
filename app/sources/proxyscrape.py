@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 import httpx
 
@@ -30,7 +31,11 @@ def _parse_datetime(value: object) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
-        return _parse_epoch_timestamp(value)
+        try:
+            parsed = parsedate_to_datetime(text)
+        except (TypeError, ValueError):
+            return _parse_epoch_timestamp(value)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
@@ -104,10 +109,19 @@ class ProxyScrapeSource(ProxySourceBase):
             if not (1 <= port_int <= 65535):
                 continue
 
+            geolocation = item.get("geolocation")
+            country_code = item.get("country_code")
+            city = item.get("city")
+            if isinstance(geolocation, dict):
+                if country_code is None and geolocation.get("country"):
+                    country_code = str(geolocation["country"]).upper()[:2]
+                if city is None:
+                    city = geolocation.get("city")
+
             metadata = {
                 key: value
                 for key, value in item.items()
-                if key not in {"ip", "port", "protocol"}
+                if key not in {"ip", "port", "protocol", "geolocation"}
             }
 
             proxies.append(
@@ -116,12 +130,12 @@ class ProxyScrapeSource(ProxySourceBase):
                     port=port_int,
                     protocol=protocol,
                     country=item.get("country"),
-                    country_code=item.get("country_code"),
-                    city=item.get("city"),
+                    country_code=str(country_code).upper()[:2] if country_code else None,
+                    city=city,
                     anonymity=item.get("anonymity"),
                     isp=item.get("isp"),
                     asn=item.get("asn"),
-                    ssl=_parse_bool(item.get("ssl")),
+                    ssl=_parse_bool(item.get("ssl")) or _parse_bool(item.get("https")),
                     source_latency_ms=_parse_float(item.get("latency_ms")),
                     source_uptime_percent=_parse_float(item.get("uptime_percent")),
                     source_last_checked=_parse_datetime(item.get("last_checked")),

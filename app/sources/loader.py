@@ -5,7 +5,10 @@ from app.config import Settings, get_settings
 from app.sources.base import ProxySourceBase
 from app.sources.config import SourcesConfig, load_sources_config
 from app.sources.geonode import GeonodeSource
+from app.sources.litport import LitportSource
+from app.sources.nodemaven import NodeMavenSource
 from app.sources.proxycompass import ProxyCompassSource
+from app.sources.proxydb import ProxyDbSource
 from app.sources.proxyscrape import ProxyScrapeSource
 from app.sources.text_list import TextListSource
 
@@ -99,6 +102,53 @@ def build_sources(config: SourcesConfig) -> list[ProxySourceBase]:
                     protocol=item.protocol,
                     priority=item.priority,
                     fetch_timeout=fetch_timeout,
+                )
+            )
+            continue
+
+        if item.type == "litport":
+            if not item.protocols:
+                raise ValueError(f"Source {item.name} requires protocols")
+            built.append(
+                LitportSource(
+                    name=item.name,
+                    url=item.url,
+                    priority=item.priority,
+                    fetch_timeout=fetch_timeout,
+                    supported_protocols=frozenset(item.protocols),
+                    page_size=item.page_size or 500,
+                    max_pages=item.max_pages or 10,
+                )
+            )
+            continue
+
+        if item.type == "nodemaven":
+            if not item.protocols:
+                raise ValueError(f"Source {item.name} requires protocols")
+            built.append(
+                NodeMavenSource(
+                    name=item.name,
+                    url=item.url,
+                    priority=item.priority,
+                    fetch_timeout=fetch_timeout,
+                    supported_protocols=frozenset(item.protocols),
+                    page_size=item.page_size or 500,
+                    max_pages=item.max_pages or 10,
+                )
+            )
+            continue
+
+        if item.type == "proxydb":
+            if not item.protocols:
+                raise ValueError(f"Source {item.name} requires protocols")
+            built.append(
+                ProxyDbSource(
+                    name=item.name,
+                    url=item.url,
+                    priority=item.priority,
+                    fetch_timeout=fetch_timeout,
+                    supported_protocols=frozenset(item.protocols),
+                    max_pages=item.max_pages or 20,
                 )
             )
             continue

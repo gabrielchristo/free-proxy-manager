@@ -42,6 +42,51 @@
       "url": "https://proxycompass.com/?page_id=455912",
       "priority": 80,
       "protocols": ["http", "https"]
+    },
+    {
+      "name": "proxifly-http",
+      "type": "proxyscrape",
+      "enabled": true,
+      "url": "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/http/data.json",
+      "priority": 75,
+      "protocols": ["http"]
+    },
+    {
+      "name": "proxifly-https",
+      "type": "proxyscrape",
+      "enabled": true,
+      "url": "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/https/data.json",
+      "priority": 74,
+      "protocols": ["https"]
+    },
+    {
+      "name": "litport",
+      "type": "litport",
+      "enabled": true,
+      "url": "https://litport.net/api/free-proxy",
+      "priority": 70,
+      "protocols": ["http", "https"],
+      "page_size": 500,
+      "max_pages": 5
+    },
+    {
+      "name": "nodemaven",
+      "type": "nodemaven",
+      "enabled": true,
+      "url": "https://freeproxies.nodemaven.com/proxies",
+      "priority": 65,
+      "protocols": ["http", "https"],
+      "page_size": 1000,
+      "max_pages": 5
+    },
+    {
+      "name": "proxydb",
+      "type": "proxydb",
+      "enabled": true,
+      "url": "https://proxydb.net/",
+      "priority": 60,
+      "protocols": ["http", "https"],
+      "max_pages": 15
     }
   ]
 }

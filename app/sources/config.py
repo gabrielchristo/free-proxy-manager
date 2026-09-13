@@ -11,7 +11,7 @@ class SourceDefinition(BaseModel):
     priority: int = Field(ge=0)
     protocol: str | None = None
     protocols: list[str] | None = None
-    page_size: int | None = Field(default=None, ge=1, le=500)
+    page_size: int | None = Field(default=None, ge=1, le=1000)
     max_pages: int | None = Field(default=None, ge=1, le=500)
     download_url: str | None = None
     export_filter: dict | None = None
