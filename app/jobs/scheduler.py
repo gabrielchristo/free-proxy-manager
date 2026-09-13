@@ -56,8 +56,15 @@ class JobScheduler:
         logger.info("Background jobs stopped")
 
     async def _run_initial_cycle(self) -> None:
-        """Collect once on startup, then prime the checker queue."""
-        await self.collector_job.run()
+        """Optionally collect on startup, then prime the checker queue."""
+        if self.settings.collector_run_on_startup:
+            await self.collector_job.run()
+        else:
+            logger.info(
+                "Skipping initial collector run (COLLECTOR_RUN_ON_STARTUP=false); "
+                "next collect in %ss",
+                self.settings.collect_interval,
+            )
         await self.checker_job.refill_queue()
 
     async def _checker_refill_loop(self) -> None:

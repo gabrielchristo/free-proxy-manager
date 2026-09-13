@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     check_follow_redirects: bool
 
     collect_interval: int = Field(ge=60)
+    collector_run_on_startup: bool = True
     collector_persist_batch_size: int = Field(default=250, ge=1, le=2000)
     recheck_interval: int = Field(ge=60)
     cleanup_interval: int = Field(ge=300)
