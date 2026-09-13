@@ -69,6 +69,8 @@ class Settings(BaseSettings):
     scorer_failure_penalty: float = Field(ge=0.0)
     scorer_history_cap: int = Field(ge=0)
     scorer_score_max: float = Field(ge=1.0)
+    scorer_https_bonus: float = Field(ge=0.0)
+    scorer_https_protocol: str
 
     @field_validator(
         "check_allowed_hosts",

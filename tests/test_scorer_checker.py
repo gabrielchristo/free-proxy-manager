@@ -43,3 +43,21 @@ def test_scorer_prefers_stable_low_latency_proxy():
     )
 
     assert scorer.calculate(stable) > scorer.calculate(unstable)
+
+
+def test_scorer_prefers_https_over_http_with_same_metrics():
+    settings = get_settings()
+    scorer = ScorerService(settings)
+    base_kwargs = {
+        "host": "1.1.1.1",
+        "port": 8080,
+        "status": ProxyStatus.HEALTHY,
+        "success_count": 10,
+        "failure_count": 1,
+        "consecutive_failures": 0,
+        "latency_ms": 150,
+    }
+    http_proxy = Proxy(protocol="http", **base_kwargs)
+    https_proxy = Proxy(protocol=settings.scorer_https_protocol, **base_kwargs)
+
+    assert scorer.calculate(https_proxy) > scorer.calculate(http_proxy)

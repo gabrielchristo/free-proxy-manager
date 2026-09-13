@@ -14,6 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p /data
+RUN mkdir -p data
 
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host \"$API_HOST\" --port \"$API_PORT\""]

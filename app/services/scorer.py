@@ -27,12 +27,18 @@ class ScorerService:
 
         stability_penalty = proxy.consecutive_failures * self.settings.scorer_failure_penalty
         history_bonus = min(proxy.success_count, self.settings.scorer_history_cap)
+        protocol_bonus = (
+            self.settings.scorer_https_bonus
+            if proxy.protocol == self.settings.scorer_https_protocol
+            else 0.0
+        )
 
         score = (
             success_rate * self.settings.scorer_success_weight
             + latency_score
             + recency_score
             + history_bonus
+            + protocol_bonus
             - stability_penalty
         )
         return round(max(0.0, min(self.settings.scorer_score_max, score)), 2)
