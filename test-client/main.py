@@ -215,7 +215,7 @@ async def wait_for_healthy_pool(
         last = await fetch_pool_diagnostics(
             client,
             manager_url,
-            list_protocol="https",
+            list_protocol="http",
             list_status="HEALTHY",
             list_anonymous=True,
         )
@@ -573,8 +573,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--list-protocol",
-        default="https",
-        help="Protocol filter for GET /proxies batch (default: https)",
+        default="http",
+        help="Protocol filter for GET /proxies batch (default: http)",
     )
     parser.add_argument(
         "--list-fetch-limit",

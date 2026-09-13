@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     checker_enqueue_batch_size: int = Field(ge=1)
     checker_refill_interval: int = Field(ge=1)
     checker_selection_pool_size: int = Field(default=500, ge=1)
+    checker_transport_pool_size: int = Field(default=64, ge=1, le=500)
     check_timeout: float = Field(ge=1.0, le=60.0)
     check_url: str
     check_allowed_hosts: Annotated[frozenset[str], NoDecode]
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     check_follow_redirects: bool
 
     collect_interval: int = Field(ge=60)
+    collector_persist_batch_size: int = Field(default=250, ge=1, le=2000)
     recheck_interval: int = Field(ge=60)
     cleanup_interval: int = Field(ge=300)
     score_interval: int = Field(ge=60)

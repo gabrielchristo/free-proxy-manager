@@ -83,10 +83,15 @@ class CollectorService:
                 db_source.url = source_url
                 db_source.priority = source_priority
 
+            queued_ids = self._persist_collected(
+                db,
+                db_source.id,
+                db_source.name,
+                collected,
+            )
             db_source.last_success = utc_now()
             db_source.last_error = None
             db_source.proxies_found = len(collected)
-            queued_ids = self._persist_collected(db, db_source, collected)
             db.commit()
             return queued_ids
         finally:
@@ -124,12 +129,15 @@ class CollectorService:
     def _persist_collected(
         self,
         db: Session,
-        db_source: ProxySource,
+        source_id: int,
+        source_name: str,
         collected: list[CollectedProxy],
     ) -> list[int]:
         now = utc_now()
         queued_ids: list[int] = []
         seen: set[tuple[str, str, int]] = set()
+        batch_size = self.settings.collector_persist_batch_size
+        since_commit = 0
 
         for item in collected:
             key = (item.protocol, item.host, item.port)
@@ -159,7 +167,7 @@ class CollectorService:
                 db.flush()
                 logger.info(
                     "[%s] Discovered new proxy %s",
-                    db_source.name,
+                    source_name,
                     proxy.url,
                 )
             else:
@@ -171,12 +179,12 @@ class CollectorService:
                 db.query(ProxySourceLink)
                 .filter(
                     ProxySourceLink.proxy_id == proxy.id,
-                    ProxySourceLink.source_id == db_source.id,
+                    ProxySourceLink.source_id == source_id,
                 )
                 .one_or_none()
             )
             if link is None:
-                link = ProxySourceLink(proxy_id=proxy.id, source_id=db_source.id)
+                link = ProxySourceLink(proxy_id=proxy.id, source_id=source_id)
                 db.add(link)
             else:
                 link.last_seen = now
@@ -185,5 +193,15 @@ class CollectorService:
             if is_new or proxy.status in {ProxyStatus.NEW, ProxyStatus.DEAD, ProxyStatus.DEGRADED}:
                 if proxy.cooldown_until is None or as_utc(proxy.cooldown_until) <= now:
                     queued_ids.append(proxy.id)
+
+            since_commit += 1
+            if since_commit >= batch_size:
+                db.commit()
+                db.expunge_all()
+                since_commit = 0
+
+        if since_commit > 0:
+            db.commit()
+            db.expunge_all()
 
         return queued_ids
