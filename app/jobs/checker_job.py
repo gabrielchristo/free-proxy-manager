@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.database import SessionLocal
-from app.models import Proxy, ProxyStatus
+from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.services.checker import CheckerService, CheckResult
 from app.services.scorer import ScorerService
 
@@ -21,6 +21,8 @@ class ProxyCheckTarget:
     port: int
     protocol: str
     url: str
+    source_label: str
+    previous_status: str
 
 
 class CheckerJob:
@@ -75,6 +77,7 @@ class CheckerJob:
         )
         ids = [row[0] for row in due]
         await self.enqueue(ids)
+        logger.info("Recheck enqueued proxies=%s", len(ids))
         return len(ids)
 
     async def _worker(self, worker_id: int) -> None:
@@ -85,7 +88,7 @@ class CheckerJob:
                     break
                 await self._check_proxy(proxy_id)
             except Exception:
-                logger.exception("Checker worker %s failed for proxy %s", worker_id, proxy_id)
+                logger.exception("Checker worker %s failed for proxy_id=%s", worker_id, proxy_id)
             finally:
                 self.queue.task_done()
 
@@ -94,6 +97,11 @@ class CheckerJob:
         if target is None:
             return
 
+        logger.info(
+            "[%s] Checking proxy %s",
+            target.source_label,
+            target.url,
+        )
         result = await self.checker.check_proxy(
             host=target.host,
             port=target.port,
@@ -108,6 +116,8 @@ class CheckerJob:
             if proxy is None:
                 return None
 
+            source_label = self._resolve_source_label(db, proxy_id)
+            previous_status = proxy.status.value
             proxy.status = ProxyStatus.CHECKING
             db.commit()
             return ProxyCheckTarget(
@@ -116,6 +126,8 @@ class CheckerJob:
                 port=proxy.port,
                 protocol=proxy.protocol,
                 url=proxy.url,
+                source_label=source_label,
+                previous_status=previous_status,
             )
         finally:
             db.close()
@@ -127,16 +139,63 @@ class CheckerJob:
             if proxy is None:
                 return
 
+            previous_status = target.previous_status
             self._apply_result(proxy, result)
             self.scorer.apply_to_proxy(proxy)
             db.commit()
 
+            if (
+                not result.success
+                and proxy.status == ProxyStatus.DEAD
+                and proxy.cooldown_until is not None
+            ):
+                logger.info(
+                    "[%s] Proxy %s entered cooldown until=%s level=%s",
+                    target.source_label,
+                    target.url,
+                    proxy.cooldown_until.isoformat(),
+                    proxy.cooldown_level,
+                )
+
             if result.success:
-                logger.debug("Proxy %s healthy (score=%s)", target.url, proxy.score)
-            else:
-                logger.debug("Proxy %s failed: %s", target.url, result.error)
+                logger.info(
+                    "[%s] Proxy %s check succeeded status=%s->%s http=%s latency_ms=%s score=%s",
+                    target.source_label,
+                    target.url,
+                    previous_status,
+                    proxy.status.value,
+                    result.http_status,
+                    result.latency_ms,
+                    proxy.score,
+                )
+                return
+
+            logger.info(
+                "[%s] Proxy %s check failed status=%s->%s error=%s http=%s latency_ms=%s requires_auth=%s",
+                target.source_label,
+                target.url,
+                previous_status,
+                proxy.status.value,
+                result.error,
+                result.http_status,
+                result.latency_ms,
+                result.requires_auth,
+            )
         finally:
             db.close()
+
+    @staticmethod
+    def _resolve_source_label(db: Session, proxy_id: int) -> str:
+        rows = (
+            db.query(ProxySource.name)
+            .join(ProxySourceLink, ProxySourceLink.source_id == ProxySource.id)
+            .filter(ProxySourceLink.proxy_id == proxy_id)
+            .order_by(ProxySource.priority.desc(), ProxySource.name.asc())
+            .all()
+        )
+        if not rows:
+            return "unknown"
+        return ", ".join(row[0] for row in rows)
 
     def _apply_result(self, proxy: Proxy, result: CheckResult) -> None:
         now = datetime.now(UTC)

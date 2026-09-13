@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.sources.base import CollectedProxy, ProxySourceBase
-from app.sources.proxyscrape import ProxyScrapeSource
+from app.sources.loader import load_sources
 
 logger = logging.getLogger(__name__)
 
@@ -14,21 +14,7 @@ logger = logging.getLogger(__name__)
 class CollectorService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
-        self.sources = self._build_sources()
-
-    def _build_sources(self) -> list[ProxySourceBase]:
-        sources: list[ProxySourceBase] = []
-        if self.settings.proxyscrape_enabled:
-            sources.append(
-                ProxyScrapeSource(
-                    name=self.settings.proxyscrape_name,
-                    url=self.settings.proxyscrape_url,
-                    priority=self.settings.proxyscrape_priority,
-                    fetch_timeout=self.settings.source_fetch_timeout,
-                    supported_protocols=self.settings.supported_protocols,
-                )
-            )
-        return sources
+        self.sources = load_sources(self.settings)
 
     async def collect_all(self, db: Session) -> list[int]:
         """Collect from all enabled sources and return proxy IDs queued for checking."""
@@ -37,9 +23,11 @@ class CollectorService:
         for source in self.sources:
             db_source = self._get_or_create_source(db, source)
             if not db_source.enabled:
+                logger.info("[%s] Source disabled in database, skipping", source.name)
                 continue
 
             db_source.last_run = datetime.now(UTC)
+            logger.info("[%s] Collection started url=%s", source.name, source.url)
             try:
                 collected = await source.collect()
                 db_source.last_success = datetime.now(UTC)
@@ -48,14 +36,14 @@ class CollectorService:
                 new_ids = self._persist_collected(db, db_source, collected)
                 queued_ids.extend(new_ids)
                 logger.info(
-                    "Source %s completed: %s proxies, %s new/updated for check",
+                    "[%s] Collection completed proxies=%s queued=%s",
                     source.name,
                     len(collected),
                     len(new_ids),
                 )
             except Exception as exc:
                 db_source.last_error = str(exc)
-                logger.exception("Source %s failed", source.name)
+                logger.exception("[%s] Collection failed", source.name)
 
         db.commit()
         return queued_ids
@@ -115,6 +103,11 @@ class CollectorService:
                 )
                 db.add(proxy)
                 db.flush()
+                logger.info(
+                    "[%s] Discovered new proxy %s",
+                    db_source.name,
+                    proxy.url,
+                )
             else:
                 proxy.last_seen = now
                 if item.country:

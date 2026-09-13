@@ -1,7 +1,8 @@
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -21,8 +22,8 @@ class Settings(BaseSettings):
     checker_concurrency: int = Field(ge=1, le=500)
     check_timeout: float = Field(ge=1.0, le=60.0)
     check_url: str
-    check_allowed_hosts: frozenset[str]
-    check_allowed_schemes: frozenset[str]
+    check_allowed_hosts: Annotated[frozenset[str], NoDecode]
+    check_allowed_schemes: Annotated[frozenset[str], NoDecode]
     check_success_status_min: int = Field(ge=100, le=599)
     check_success_status_max: int = Field(ge=100, le=599)
     check_follow_redirects: bool
@@ -53,12 +54,7 @@ class Settings(BaseSettings):
     db_pool_timeout: int = Field(ge=1)
     db_sqlite_timeout: int = Field(ge=1)
 
-    proxyscrape_enabled: bool
-    proxyscrape_name: str
-    proxyscrape_url: str
-    proxyscrape_priority: int
-    source_fetch_timeout: float = Field(ge=1.0, le=120.0)
-    supported_protocols: frozenset[str]
+    sources_config_path: str
 
     anonymous_exclude_value: str
 
@@ -75,7 +71,6 @@ class Settings(BaseSettings):
     @field_validator(
         "check_allowed_hosts",
         "check_allowed_schemes",
-        "supported_protocols",
         mode="before",
     )
     @classmethod

@@ -1,0 +1,29 @@
+{
+  "fetch_timeout": 30,
+  "sources": [
+    {
+      "name": "proxyscrape",
+      "type": "proxyscrape",
+      "enabled": true,
+      "url": "https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/all/data.json",
+      "priority": 100,
+      "protocols": ["http", "https"]
+    },
+    {
+      "name": "iplocate-http",
+      "type": "text_list",
+      "enabled": true,
+      "url": "https://github.com/iplocate/free-proxy-list/blob/main/protocols/http.txt",
+      "protocol": "http",
+      "priority": 90
+    },
+    {
+      "name": "iplocate-https",
+      "type": "text_list",
+      "enabled": true,
+      "url": "https://github.com/iplocate/free-proxy-list/blob/main/protocols/https.txt",
+      "protocol": "https",
+      "priority": 95
+    }
+  ]
+}
