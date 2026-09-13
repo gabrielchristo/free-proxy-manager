@@ -80,3 +80,52 @@ def test_scorer_handles_naive_last_success():
     )
 
     assert scorer.calculate(proxy) >= 0
+
+
+def test_scorer_adds_bonus_for_multiple_sources():
+    settings = get_settings()
+    scorer = ScorerService(settings)
+    proxy = Proxy(
+        host="1.1.1.1",
+        port=8080,
+        protocol="http",
+        status=ProxyStatus.HEALTHY,
+        success_count=10,
+        failure_count=1,
+        consecutive_failures=0,
+        latency_ms=150,
+    )
+
+    single_source_score = scorer.calculate(proxy, source_count=1)
+    multi_source_score = scorer.calculate(proxy, source_count=3)
+
+    assert multi_source_score == single_source_score + (2 * settings.scorer_multi_source_bonus)
+
+
+def test_scorer_prefers_higher_anonymity_levels():
+    settings = get_settings()
+    scorer = ScorerService(settings)
+    base_kwargs = {
+        "host": "1.1.1.1",
+        "port": 8080,
+        "protocol": "http",
+        "status": ProxyStatus.HEALTHY,
+        "success_count": 10,
+        "failure_count": 1,
+        "consecutive_failures": 0,
+        "latency_ms": 150,
+    }
+    transparent = Proxy(anonymity="transparent", **base_kwargs)
+    anonymous = Proxy(anonymity="anonymous", **base_kwargs)
+    elite = Proxy(anonymity="elite", **base_kwargs)
+
+    transparent_score = scorer.calculate(transparent)
+    anonymous_score = scorer.calculate(anonymous)
+    elite_score = scorer.calculate(elite)
+
+    assert anonymous_score > transparent_score
+    assert elite_score > anonymous_score
+    assert elite_score - transparent_score == pytest.approx(
+        settings.scorer_anonymity_bonus["elite"] - settings.scorer_anonymity_bonus["transparent"]
+    )
+

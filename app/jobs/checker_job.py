@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
@@ -52,12 +53,26 @@ class CheckerJob:
 
     async def stop(self) -> None:
         self._running = False
-        for _ in self._workers:
-            await self.queue.put(None)
+        drained = self._drain_queue()
+        if drained:
+            logger.info("Checker queue drained: %s pending checks skipped", drained)
+        for worker in self._workers:
+            worker.cancel()
         if self._workers:
             await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
         logger.info("Checker workers stopped")
+
+    def _drain_queue(self) -> int:
+        drained = 0
+        while True:
+            try:
+                self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            drained += 1
+            self.queue.task_done()
+        return drained
 
     async def enqueue(self, proxy_ids: list[int]) -> None:
         for proxy_id in proxy_ids:
@@ -142,7 +157,8 @@ class CheckerJob:
 
             previous_status = target.previous_status
             self._apply_result(proxy, result)
-            self.scorer.apply_to_proxy(proxy)
+            source_count = self._count_sources(db, proxy.id)
+            self.scorer.apply_to_proxy(proxy, source_count=source_count)
             db.commit()
 
             if (
@@ -197,6 +213,16 @@ class CheckerJob:
         if not rows:
             return "unknown"
         return ", ".join(row[0] for row in rows)
+
+    @staticmethod
+    def _count_sources(db: Session, proxy_id: int) -> int:
+        count = (
+            db.query(func.count(ProxySourceLink.id))
+            .filter(ProxySourceLink.proxy_id == proxy_id)
+            .scalar()
+            or 0
+        )
+        return max(count, 1)
 
     def _apply_result(self, proxy: Proxy, result: CheckResult) -> None:
         now = utc_now()

@@ -23,12 +23,25 @@ def test_build_sources_from_json_config():
                     "protocol": "http",
                     "priority": 90,
                 },
+                {
+                    "name": "geonode",
+                    "type": "geonode",
+                    "enabled": True,
+                    "url": "https://proxylist.geonode.com/api/proxy-list",
+                    "priority": 85,
+                    "protocols": ["http", "https"],
+                    "page_size": 50,
+                    "max_pages": 10,
+                },
             ],
         }
     )
 
     sources = build_sources(config)
 
-    assert len(sources) == 1
+    assert len(sources) == 2
     assert sources[0].name == "proxyscrape"
     assert sources[0].priority == 100
+    assert sources[1].name == "geonode"
+    assert sources[1].page_size == 50
+    assert sources[1].max_pages == 10

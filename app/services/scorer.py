@@ -7,7 +7,7 @@ class ScorerService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
-    def calculate(self, proxy: Proxy) -> float:
+    def calculate(self, proxy: Proxy, source_count: int = 1) -> float:
         total_checks = proxy.success_count + proxy.failure_count
         success_rate = proxy.success_count / total_checks if total_checks else 0.0
 
@@ -31,6 +31,10 @@ class ScorerService:
             if proxy.protocol == self.settings.scorer_https_protocol
             else 0.0
         )
+        multi_source_bonus = 0.0
+        if source_count > 1:
+            multi_source_bonus = (source_count - 1) * self.settings.scorer_multi_source_bonus
+        anonymity_bonus = self._anonymity_bonus(proxy)
 
         score = (
             success_rate * self.settings.scorer_success_weight
@@ -38,10 +42,18 @@ class ScorerService:
             + recency_score
             + history_bonus
             + protocol_bonus
+            + multi_source_bonus
+            + anonymity_bonus
             - stability_penalty
         )
         return round(max(0.0, min(self.settings.scorer_score_max, score)), 2)
 
-    def apply_to_proxy(self, proxy: Proxy) -> float:
-        proxy.score = self.calculate(proxy)
+    def apply_to_proxy(self, proxy: Proxy, source_count: int = 1) -> float:
+        proxy.score = self.calculate(proxy, source_count=source_count)
         return proxy.score
+
+    def _anonymity_bonus(self, proxy: Proxy) -> float:
+        if not proxy.anonymity:
+            return 0.0
+        level = proxy.anonymity.strip().lower()
+        return self.settings.scorer_anonymity_bonus.get(level, 0.0)

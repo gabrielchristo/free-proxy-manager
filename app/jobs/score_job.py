@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Proxy
 from app.services.scorer import ScorerService
@@ -14,8 +14,9 @@ class ScoreJob:
 
     def run(self, db: Session) -> int:
         updated = 0
-        for proxy in db.query(Proxy).all():
-            self.scorer.apply_to_proxy(proxy)
+        for proxy in db.query(Proxy).options(joinedload(Proxy.sources)).all():
+            source_count = max(len(proxy.sources), 1)
+            self.scorer.apply_to_proxy(proxy, source_count=source_count)
             updated += 1
         db.commit()
         logger.info("Score recalculation completed for %s proxies", updated)

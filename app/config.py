@@ -73,6 +73,29 @@ class Settings(BaseSettings):
     scorer_score_max: float = Field(ge=1.0)
     scorer_https_bonus: float = Field(ge=0.0)
     scorer_https_protocol: str
+    scorer_multi_source_bonus: float = Field(ge=0.0)
+    scorer_anonymity_bonus: Annotated[dict[str, float], NoDecode]
+
+    @field_validator("scorer_anonymity_bonus", mode="before")
+    @classmethod
+    def parse_scorer_anonymity_bonus(cls, value: object) -> dict[str, float]:
+        if isinstance(value, dict):
+            return {str(key).strip().lower(): float(bonus) for key, bonus in value.items()}
+        if isinstance(value, str):
+            bonuses: dict[str, float] = {}
+            for entry in value.split(","):
+                item = entry.strip()
+                if not item:
+                    continue
+                if "=" not in item:
+                    raise ValueError(f"Invalid SCORER_ANONYMITY_BONUS entry: {item}")
+                level, raw_bonus = item.split("=", 1)
+                level = level.strip().lower()
+                if not level:
+                    raise ValueError(f"Invalid SCORER_ANONYMITY_BONUS entry: {item}")
+                bonuses[level] = float(raw_bonus.strip())
+            return bonuses
+        raise TypeError("SCORER_ANONYMITY_BONUS must be a comma-separated key=value list")
 
     @field_validator("db_checkpoint_commit_mode", "db_checkpoint_interval_mode")
     @classmethod

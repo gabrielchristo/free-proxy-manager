@@ -24,6 +24,16 @@
       "url": "https://github.com/iplocate/free-proxy-list/blob/main/protocols/https.txt",
       "protocol": "https",
       "priority": 95
+    },
+    {
+      "name": "geonode",
+      "type": "geonode",
+      "enabled": true,
+      "url": "https://proxylist.geonode.com/api/proxy-list",
+      "priority": 85,
+      "protocols": ["http", "https"],
+      "page_size": 100,
+      "max_pages": 25
     }
   ]
 }

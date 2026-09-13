@@ -11,6 +11,8 @@ class SourceDefinition(BaseModel):
     priority: int = Field(ge=0)
     protocol: str | None = None
     protocols: list[str] | None = None
+    page_size: int | None = Field(default=None, ge=1, le=500)
+    max_pages: int | None = Field(default=None, ge=1, le=500)
     fetch_timeout: float | None = Field(default=None, ge=1.0, le=120.0)
 
     @field_validator("protocol", "protocols", mode="before")

@@ -42,11 +42,11 @@ class JobScheduler:
     async def stop(self) -> None:
         for task in self._tasks:
             task.cancel()
+        await self.checker_job.stop()
         for task in self._tasks:
             with suppress(asyncio.CancelledError):
                 await task
         self._tasks.clear()
-        await self.checker_job.stop()
         logger.info("Background jobs stopped")
 
     async def _run_initial_cycle(self) -> None:

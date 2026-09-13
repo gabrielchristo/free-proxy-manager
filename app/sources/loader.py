@@ -4,6 +4,7 @@ from pathlib import Path
 from app.config import Settings, get_settings
 from app.sources.base import ProxySourceBase
 from app.sources.config import SourcesConfig, load_sources_config
+from app.sources.geonode import GeonodeSource
 from app.sources.proxyscrape import ProxyScrapeSource
 from app.sources.text_list import TextListSource
 
@@ -51,6 +52,22 @@ def build_sources(config: SourcesConfig) -> list[ProxySourceBase]:
                     priority=item.priority,
                     fetch_timeout=fetch_timeout,
                     supported_protocols=frozenset(item.protocols),
+                )
+            )
+            continue
+
+        if item.type == "geonode":
+            if not item.protocols:
+                raise ValueError(f"Source {item.name} requires protocols")
+            built.append(
+                GeonodeSource(
+                    name=item.name,
+                    url=item.url,
+                    priority=item.priority,
+                    fetch_timeout=fetch_timeout,
+                    supported_protocols=frozenset(item.protocols),
+                    page_size=item.page_size or 100,
+                    max_pages=item.max_pages or 25,
                 )
             )
             continue
