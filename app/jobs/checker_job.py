@@ -206,7 +206,7 @@ class CheckerJob:
             if seen:
                 query = query.filter(~Proxy.id.in_(seen))
 
-            picked = self._pick_random_proxy_rows(query, remaining)
+            picked = self._pick_fair_proxy_rows(db, query, remaining)
             for proxy_id, last_checked in picked:
                 collected.append(proxy_id)
                 selected_rows.append((proxy_id, last_checked))
@@ -227,7 +227,7 @@ class CheckerJob:
             if seen:
                 query = query.filter(~Proxy.id.in_(seen))
 
-            picked = self._pick_random_proxy_rows(query, remaining)
+            picked = self._pick_fair_proxy_rows(db, query, remaining)
             for proxy_id, last_checked in picked:
                 collected.append(proxy_id)
                 selected_rows.append((proxy_id, last_checked))
@@ -240,28 +240,110 @@ class CheckerJob:
         take([ProxyStatus.DEAD], cooldown_only=True)
         return collected, self._format_last_checked_range(selected_rows)
 
-    def _pick_random_proxy_rows(
+    @staticmethod
+    def _enabled_source_ids(db: Session) -> list[int]:
+        """Return enabled provider ids in stable priority order."""
+        rows = (
+            db.query(ProxySource.id)
+            .filter(ProxySource.enabled.is_(True))
+            .order_by(ProxySource.priority.desc(), ProxySource.name.asc())
+            .all()
+        )
+        return [row[0] for row in rows]
+
+    @staticmethod
+    def _round_robin_proxy_rows(
+        buckets: dict[int, list[tuple[int, datetime | None]]],
+        limit: int,
+    ) -> list[tuple[int, datetime | None]]:
+        """Interleave proxy candidates across provider buckets without duplicates."""
+        if limit <= 0 or not buckets:
+            return []
+
+        order = list(buckets.keys())
+        random.shuffle(order)
+        pointers = dict.fromkeys(order, 0)
+        selected: list[tuple[int, datetime | None]] = []
+        seen: set[int] = set()
+
+        while len(selected) < limit and order:
+            round_progress = False
+            exhausted: list[int] = []
+            for source_id in order:
+                if len(selected) >= limit:
+                    break
+
+                pool = buckets[source_id]
+                pointer = pointers[source_id]
+                while pointer < len(pool):
+                    proxy_id, last_checked = pool[pointer]
+                    pointer += 1
+                    if proxy_id in seen:
+                        continue
+                    seen.add(proxy_id)
+                    selected.append((proxy_id, last_checked))
+                    pointers[source_id] = pointer
+                    round_progress = True
+                    break
+                else:
+                    pointers[source_id] = pointer
+                    exhausted.append(source_id)
+
+            for source_id in exhausted:
+                order.remove(source_id)
+            if not round_progress:
+                break
+
+        return selected
+
+    def _pick_fair_proxy_rows(
         self,
+        db: Session,
         query,
         limit: int,
     ) -> list[tuple[int, datetime | None]]:
-        """Build a candidate pool ordered by oldest last_checked, shuffle, then take a batch."""
+        """Pick proxies with round-robin fairness across enabled providers."""
         if limit <= 0:
             return []
 
         pool_size = max(limit, self.settings.checker_selection_pool_size)
-        rows = (
-            query.with_entities(Proxy.id, Proxy.last_checked)
+        source_ids = self._enabled_source_ids(db)
+        bucket_count = max(len(source_ids) + 1, 1)
+        per_source_pool = max(1, pool_size // bucket_count)
+
+        buckets: dict[int, list[tuple[int, datetime | None]]] = {}
+        for source_id in source_ids:
+            scoped = query.join(ProxySourceLink, ProxySourceLink.proxy_id == Proxy.id).filter(
+                ProxySourceLink.source_id == source_id
+            )
+            rows = (
+                scoped.with_entities(Proxy.id, Proxy.last_checked)
+                .order_by(Proxy.last_checked.asc().nullsfirst(), Proxy.id.asc())
+                .limit(per_source_pool)
+                .all()
+            )
+            if rows:
+                shuffled = list(rows)
+                random.shuffle(shuffled)
+                buckets[source_id] = shuffled
+
+        linked_ids = db.query(ProxySourceLink.proxy_id).distinct().scalar_subquery()
+        unlinked_rows = (
+            query.filter(~Proxy.id.in_(linked_ids))
+            .with_entities(Proxy.id, Proxy.last_checked)
             .order_by(Proxy.last_checked.asc().nullsfirst(), Proxy.id.asc())
-            .limit(pool_size)
+            .limit(per_source_pool)
             .all()
         )
-        if not rows:
+        if unlinked_rows:
+            shuffled = list(unlinked_rows)
+            random.shuffle(shuffled)
+            buckets[0] = shuffled
+
+        if not buckets:
             return []
 
-        candidates = list(rows)
-        random.shuffle(candidates)
-        return candidates[:limit]
+        return self._round_robin_proxy_rows(buckets, limit)
 
     @staticmethod
     def _format_last_checked_range(

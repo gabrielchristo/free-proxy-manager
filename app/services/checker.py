@@ -40,15 +40,15 @@ class PerRequestProxyTransport(httpx.AsyncBaseTransport):
         if not proxy:
             raise RuntimeError("Missing proxy extension on checker request")
 
-        transport = httpx.AsyncHTTPTransport(
+        async with httpx.AsyncHTTPTransport(
             proxy=str(proxy),
             verify=self._verify,
             limits=self._limits,
-        )
-        try:
-            return await transport.handle_async_request(request)
-        finally:
-            await transport.aclose()
+        ) as transport:
+            response = await transport.handle_async_request(request)
+            # Buffer body before closing inner transport; otherwise httpx raises ReadError.
+            await response.aread()
+            return response
 
 
 class CheckerService:

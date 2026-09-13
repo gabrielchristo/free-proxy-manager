@@ -26,6 +26,14 @@ class PoolService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
+    def _healthy_query(self, db: Session):
+        """Proxies eligible for GET /proxy: HEALTHY only, not in cooldown."""
+        now = datetime.now(UTC)
+        return db.query(Proxy).filter(
+            Proxy.status == ProxyStatus.HEALTHY,
+            (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+        )
+
     def _base_query(self, db: Session):
         """Proxies usable for pool/API: HEALTHY or DEGRADED, not in cooldown."""
         now = datetime.now(UTC)
@@ -45,8 +53,8 @@ class PoolService:
         anonymous: bool | None = None,
         min_score: float | None = None,
     ) -> Proxy | None:
-        """Weighted-random pick among top-scoring candidates matching filters."""
-        query = self._base_query(db)
+        """Weighted-random pick among top-scoring HEALTHY candidates matching filters."""
+        query = self._healthy_query(db)
         query = self._apply_filters(
             query,
             protocol=protocol,
