@@ -96,6 +96,8 @@ class Proxy(Base):
     score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cooldown_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Sticky flag: set when the proxy first enters DEAD; used to deprioritize recheck.
+    was_dead: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     first_seen: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

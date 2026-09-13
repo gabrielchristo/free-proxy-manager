@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class CheckResult:
+    """Normalized outcome of a single proxy HTTP probe."""
+
     success: bool
     latency_ms: float | None = None
     connect_time_ms: float | None = None
@@ -21,6 +23,8 @@ class CheckResult:
 
 
 class PerRequestProxyTransport(httpx.AsyncBaseTransport):
+    """Routes each request through a dedicated proxy URL from request extensions."""
+
     def __init__(
         self,
         *,
@@ -31,6 +35,7 @@ class PerRequestProxyTransport(httpx.AsyncBaseTransport):
         self._limits = limits or httpx.Limits(max_connections=1, max_keepalive_connections=0)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        """Open a short-lived transport for the proxy declared on the request."""
         proxy = request.extensions.get("proxy")
         if not proxy:
             raise RuntimeError("Missing proxy extension on checker request")
@@ -47,6 +52,8 @@ class PerRequestProxyTransport(httpx.AsyncBaseTransport):
 
 
 class CheckerService:
+    """HTTP client wrapper that validates the probe URL and checks proxies."""
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self._client: httpx.AsyncClient | None = None
@@ -58,6 +65,7 @@ class CheckerService:
         )
 
     async def start(self) -> None:
+        """Create the shared AsyncClient used by checker workers."""
         if self._client is not None:
             return
         concurrency = self.settings.checker_concurrency
@@ -75,12 +83,14 @@ class CheckerService:
         )
 
     async def close(self) -> None:
+        """Release the shared AsyncClient."""
         if self._client is None:
             return
         await self._client.aclose()
         self._client = None
 
     def validate_check_url(self, url: str | None = None) -> str:
+        """Ensure the probe URL uses an allowed host and scheme."""
         target = url or self.settings.check_url
         parsed = urlparse(target)
         if parsed.scheme not in self.settings.check_allowed_schemes:
@@ -97,6 +107,7 @@ class CheckerService:
         port: int,
         protocol: str,
     ) -> CheckResult:
+        """Probe one proxy against the configured check URL."""
         check_url = self.validate_check_url()
         proxy_url = f"{protocol}://{host}:{port}"
         started = datetime.now(UTC)
@@ -124,6 +135,7 @@ class CheckerService:
         started: datetime,
         proxy_url: str | None = None,
     ) -> CheckResult:
+        """Execute GET through the proxy and map httpx errors to CheckResult."""
         request_kwargs: dict = {}
         if proxy_url is not None:
             request_kwargs["extensions"] = {"proxy": proxy_url}

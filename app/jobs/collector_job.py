@@ -7,10 +7,13 @@ logger = logging.getLogger(__name__)
 
 
 class CollectorJob:
+    """Thin async wrapper around CollectorService.collect_all."""
+
     def __init__(self, collector: CollectorService | None = None) -> None:
         self.collector = collector or CollectorService()
 
     async def run(self) -> list[int]:
+        """Collect from all sources and return proxy ids eligible for checking."""
         logger.info("Collector job started")
         queued_ids = await self.collector.collect_all()
         logger.info("Collector job completed: %s proxies queued", len(queued_ids))

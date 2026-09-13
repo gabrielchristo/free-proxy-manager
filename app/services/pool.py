@@ -21,10 +21,13 @@ USABLE_STATUSES = {ProxyStatus.HEALTHY, ProxyStatus.DEGRADED}
 
 
 class PoolService:
+    """Read-only queries for proxy pool selection, listing, and statistics."""
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
     def _base_query(self, db: Session):
+        """Proxies usable for pool/API: HEALTHY or DEGRADED, not in cooldown."""
         now = datetime.now(UTC)
         return db.query(Proxy).filter(
             Proxy.status.in_(USABLE_STATUSES),
@@ -42,6 +45,7 @@ class PoolService:
         anonymous: bool | None = None,
         min_score: float | None = None,
     ) -> Proxy | None:
+        """Weighted-random pick among top-scoring candidates matching filters."""
         query = self._base_query(db)
         query = self._apply_filters(
             query,
@@ -80,6 +84,7 @@ class PoolService:
         anonymous: bool | None = None,
         min_score: float | None = None,
     ) -> tuple[int, list[ProxyListItem]]:
+        """Paginated proxy list with optional filters; returns (total, items)."""
         page_limit = limit or self.settings.api_default_limit
         query = db.query(Proxy)
         if status:
@@ -107,6 +112,7 @@ class PoolService:
         return total, [self._to_list_item(proxy) for proxy in rows]
 
     def get_stats(self, db: Session) -> StatsResponse:
+        """Aggregate pool, protocol, latency, and per-source statistics."""
         now = datetime.now(UTC)
         total = db.query(func.count(Proxy.id)).scalar() or 0
 
@@ -202,6 +208,7 @@ class PoolService:
 
     @staticmethod
     def to_response(proxy: Proxy) -> ProxyResponse:
+        """Map a Proxy ORM row to the public API response schema."""
         return ProxyResponse(
             proxy=proxy.url,
             protocol=proxy.protocol,
@@ -267,6 +274,7 @@ class PoolService:
         anonymous: bool | None,
         min_score: float | None,
     ):
+        """Apply optional query filters shared by list and get_best_proxy."""
         if protocol:
             query = query.filter(Proxy.protocol == protocol.lower())
         if country:

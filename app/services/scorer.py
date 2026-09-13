@@ -4,10 +4,13 @@ from app.models import Proxy
 
 
 class ScorerService:
+    """Calculates a 0–100 score from proxy health metrics and metadata bonuses."""
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
     def calculate(self, proxy: Proxy, source_count: int = 1) -> float:
+        """Return the weighted score for one proxy without mutating it."""
         total_checks = proxy.success_count + proxy.failure_count
         success_rate = proxy.success_count / total_checks if total_checks else 0.0
 
@@ -49,10 +52,12 @@ class ScorerService:
         return round(max(0.0, min(self.settings.scorer_score_max, score)), 2)
 
     def apply_to_proxy(self, proxy: Proxy, source_count: int = 1) -> float:
+        """Calculate and persist the score on the proxy instance."""
         proxy.score = self.calculate(proxy, source_count=source_count)
         return proxy.score
 
     def _anonymity_bonus(self, proxy: Proxy) -> float:
+        """Map anonymity level to configured bonus points."""
         if not proxy.anonymity:
             return 0.0
         level = proxy.anonymity.strip().lower()

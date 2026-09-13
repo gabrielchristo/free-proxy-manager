@@ -9,8 +9,8 @@ services:
     volumes:
       - ./data:/app/data
     restart: unless-stopped
-    mem_limit: 512m
-    memswap_limit: 512m
+    mem_limit: ${DOCKER_MEMORY_LIMIT}
+    memswap_limit: ${DOCKER_MEMORY_LIMIT}
     environment:
       MALLOC_ARENA_MAX: "2"
     healthcheck:

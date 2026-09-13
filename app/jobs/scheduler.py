@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class JobScheduler:
+    """Coordinates background collector, checker, score, cleanup, and checkpoint loops."""
+
     def __init__(self) -> None:
         self.settings = get_settings()
         self.queue: asyncio.Queue[int | None] = asyncio.Queue(
@@ -27,11 +29,11 @@ class JobScheduler:
         self._tasks: list[asyncio.Task] = []
 
     async def start(self) -> None:
+        """Start checker workers and periodic background tasks."""
         await self.checker_job.start()
         self._tasks = [
             asyncio.create_task(self._checker_refill_loop(), name="checker-refill-loop"),
             asyncio.create_task(self._collector_loop(), name="collector-loop"),
-            asyncio.create_task(self._recheck_loop(), name="recheck-loop"),
             asyncio.create_task(self._cleanup_loop(), name="cleanup-loop"),
             asyncio.create_task(self._score_loop(), name="score-loop"),
         ]
@@ -43,6 +45,7 @@ class JobScheduler:
         logger.info("Background jobs started")
 
     async def stop(self) -> None:
+        """Cancel loops and stop checker workers cleanly."""
         for task in self._tasks:
             task.cancel()
         await self.checker_job.stop()
@@ -53,27 +56,24 @@ class JobScheduler:
         logger.info("Background jobs stopped")
 
     async def _run_initial_cycle(self) -> None:
+        """Collect once on startup, then prime the checker queue."""
         await self.collector_job.run()
         await self.checker_job.refill_queue()
 
     async def _checker_refill_loop(self) -> None:
+        """Keep the checker queue filled; HEALTHY due for recheck get first priority."""
         while True:
             await self.checker_job.refill_queue()
             await asyncio.sleep(self.settings.checker_refill_interval)
 
     async def _collector_loop(self) -> None:
+        """Run source collection on a fixed interval."""
         while True:
             await asyncio.sleep(self.settings.collect_interval)
             await self.collector_job.run()
 
-    async def _recheck_loop(self) -> None:
-        while True:
-            await asyncio.sleep(self.settings.recheck_interval)
-            proxy_ids = await asyncio.to_thread(self.checker_job.prepare_recheck_cycle)
-            added = await self.checker_job.offer_proxies(proxy_ids)
-            logger.info("Recheck offered proxies=%s added=%s", len(proxy_ids), added)
-
     async def _cleanup_loop(self) -> None:
+        """Remove stale dead proxies that never succeeded."""
         while True:
             await asyncio.sleep(self.settings.cleanup_interval)
             removed = await asyncio.to_thread(self._run_cleanup_job)
@@ -81,17 +81,20 @@ class JobScheduler:
                 logger.info("Cleanup removed %s stale proxies", removed)
 
     async def _score_loop(self) -> None:
+        """Recalculate proxy scores in batches."""
         while True:
             await asyncio.sleep(self.settings.score_interval)
             updated = await asyncio.to_thread(self._run_score_job)
             logger.info("Score recalculation completed for %s proxies", updated)
 
     async def _checkpoint_loop(self) -> None:
+        """Run SQLite WAL checkpoints on a fixed interval."""
         while True:
             await asyncio.sleep(self.settings.db_checkpoint_interval)
             await asyncio.to_thread(self.checkpoint_job.run)
 
     def _run_cleanup_job(self) -> int:
+        """Execute cleanup inside a short-lived DB session."""
         db = SessionLocal()
         try:
             return self.cleanup_job.run(db)
@@ -99,6 +102,7 @@ class JobScheduler:
             db.close()
 
     def _run_score_job(self) -> int:
+        """Execute score recalculation inside a short-lived DB session."""
         db = SessionLocal()
         try:
             return self.score_job.run(db)

@@ -17,11 +17,14 @@ COLORS = {
 
 
 class ColoredFormatter(logging.Formatter):
+    """Apply ANSI colors to log lines based on level and message keywords."""
+
     def __init__(self, fmt: str, use_color: bool) -> None:
         super().__init__(fmt)
         self.use_color = use_color
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format the record and wrap it with a color when enabled."""
         message = super().format(record)
         if not self.use_color:
             return message
@@ -29,6 +32,7 @@ class ColoredFormatter(logging.Formatter):
         return f"{color}{message}{RESET}"
 
     def _color_for(self, record: logging.LogRecord) -> str:
+        """Pick a color from level and message content heuristics."""
         if record.levelno >= logging.ERROR:
             return COLORS["red"]
         if record.levelno >= logging.WARNING:
@@ -61,8 +65,9 @@ class ColoredFormatter(logging.Formatter):
 
 
 def setup_logging() -> None:
+    """Configure root logger with optional colored stdout formatting."""
     settings = get_settings()
-    use_color = settings.log_color_enabled and sys.stdout.isatty()
+    use_color = settings.log_color_enabled
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(ColoredFormatter(settings.log_format, use_color=use_color))
 
@@ -70,3 +75,7 @@ def setup_logging() -> None:
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+
+    # httpx/httpcore emit per-request INFO lines that look like checker success.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)

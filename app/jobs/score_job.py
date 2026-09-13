@@ -10,11 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class ScoreJob:
+    """Recalculates proxy scores in bounded batches to limit memory use."""
+
     def __init__(self, scorer: ScorerService | None = None) -> None:
         self.scorer = scorer or ScorerService()
         self.settings = get_settings()
 
     def run(self, db: Session) -> int:
+        """Walk all proxies by id and update scores; returns count updated."""
         batch_size = self.settings.score_batch_size
         updated = 0
         last_id = 0
