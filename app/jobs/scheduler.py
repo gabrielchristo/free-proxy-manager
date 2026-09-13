@@ -4,6 +4,7 @@ from contextlib import suppress
 
 from app.config import get_settings
 from app.database import SessionLocal
+from app.jobs.checkpoint_job import CheckpointJob
 from app.jobs.checker_job import CheckerJob
 from app.jobs.cleanup_job import CleanupJob
 from app.jobs.collector_job import CollectorJob
@@ -20,6 +21,7 @@ class JobScheduler:
         self.collector_job = CollectorJob()
         self.cleanup_job = CleanupJob(self.settings)
         self.score_job = ScoreJob()
+        self.checkpoint_job = CheckpointJob(self.settings)
         self._tasks: list[asyncio.Task] = []
 
     async def start(self) -> None:
@@ -30,6 +32,10 @@ class JobScheduler:
             asyncio.create_task(self._cleanup_loop(), name="cleanup-loop"),
             asyncio.create_task(self._score_loop(), name="score-loop"),
         ]
+        if self.settings.db_checkpoint_interval > 0:
+            self._tasks.append(
+                asyncio.create_task(self._checkpoint_loop(), name="checkpoint-loop")
+            )
         await self._run_initial_cycle()
         logger.info("Background jobs started")
 
@@ -80,3 +86,8 @@ class JobScheduler:
                 self.score_job.run(db)
             finally:
                 db.close()
+
+    async def _checkpoint_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.settings.db_checkpoint_interval)
+            self.checkpoint_job.run()

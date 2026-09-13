@@ -49,7 +49,7 @@ class ColoredFormatter(logging.Formatter):
             return COLORS["yellow"]
         if "recheck enqueued" in text or "recheck queued" in text:
             return COLORS["blue"]
-        if "score recalculation" in text or "cleanup removed" in text:
+        if "wal checkpoint" in text or "score recalculation" in text or "cleanup removed" in text:
             return COLORS["gray"]
         if "background jobs" in text or "checker workers" in text or "loaded" in text:
             return COLORS["gray"]

@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     db_pool_max_overflow: int = Field(ge=0)
     db_pool_timeout: int = Field(ge=1)
     db_sqlite_timeout: int = Field(ge=1)
+    db_wal_autocheckpoint: int = Field(ge=0)
+    db_checkpoint_on_commit: bool
+    db_checkpoint_commit_mode: str
+    db_checkpoint_interval: int = Field(ge=0)
+    db_checkpoint_interval_mode: str
 
     sources_config_path: str
 
@@ -68,6 +73,15 @@ class Settings(BaseSettings):
     scorer_score_max: float = Field(ge=1.0)
     scorer_https_bonus: float = Field(ge=0.0)
     scorer_https_protocol: str
+
+    @field_validator("db_checkpoint_commit_mode", "db_checkpoint_interval_mode")
+    @classmethod
+    def validate_checkpoint_mode(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        allowed = {"PASSIVE", "FULL", "RESTART", "TRUNCATE"}
+        if normalized not in allowed:
+            raise ValueError(f"Checkpoint mode must be one of {sorted(allowed)}")
+        return normalized
 
     @field_validator(
         "check_allowed_hosts",
