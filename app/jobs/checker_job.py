@@ -236,6 +236,7 @@ class CheckerJob:
             proxy.failure_count += 1
             proxy.consecutive_failures += 1
             proxy.last_failure = now
+            proxy.last_error = result.error or "proxy authentication required"
             return
 
         if result.success:
@@ -244,12 +245,14 @@ class CheckerJob:
             proxy.cooldown_until = None
             proxy.cooldown_level = 0
             proxy.last_success = now
+            proxy.last_error = None
             proxy.status = ProxyStatus.HEALTHY
             return
 
         proxy.failure_count += 1
         proxy.consecutive_failures += 1
         proxy.last_failure = now
+        proxy.last_error = result.error
 
         if proxy.consecutive_failures >= self.settings.failure_threshold:
             proxy.status = ProxyStatus.DEAD

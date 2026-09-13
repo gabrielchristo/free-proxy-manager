@@ -14,7 +14,18 @@ class ProxyResponse(BaseModel):
     score: float
     country: str | None = None
     country_code: str | None = None
+    city: str | None = None
     anonymity: str | None = None
+    isp: str | None = None
+    asn: str | None = None
+    org: str | None = None
+    ssl: bool | None = None
+    source_latency_ms: float | None = None
+    source_uptime_percent: float | None = None
+    source_speed: float | None = None
+    source_last_checked: datetime | None = None
+    last_error: str | None = None
+    metadata: dict | None = None
     status: str
 
 
@@ -28,7 +39,18 @@ class ProxyListItem(BaseModel):
     port: int
     country: str | None = None
     country_code: str | None = None
+    city: str | None = None
     anonymity: str | None = None
+    isp: str | None = None
+    asn: str | None = None
+    org: str | None = None
+    ssl: bool | None = None
+    source_latency_ms: float | None = None
+    source_uptime_percent: float | None = None
+    source_speed: float | None = None
+    source_last_checked: datetime | None = None
+    last_error: str | None = None
+    metadata: dict | None = None
     status: str
     latency_ms: float | None = None
     score: float

@@ -13,6 +13,8 @@ class SourceDefinition(BaseModel):
     protocols: list[str] | None = None
     page_size: int | None = Field(default=None, ge=1, le=500)
     max_pages: int | None = Field(default=None, ge=1, le=500)
+    download_url: str | None = None
+    export_filter: dict | None = None
     fetch_timeout: float | None = Field(default=None, ge=1.0, le=120.0)
 
     @field_validator("protocol", "protocols", mode="before")

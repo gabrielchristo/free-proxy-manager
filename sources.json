@@ -34,6 +34,14 @@
       "protocols": ["http", "https"],
       "page_size": 100,
       "max_pages": 25
+    },
+    {
+      "name": "proxycompass",
+      "type": "proxycompass",
+      "enabled": true,
+      "url": "https://proxycompass.com/?page_id=455912",
+      "priority": 80,
+      "protocols": ["http", "https"]
     }
   ]
 }

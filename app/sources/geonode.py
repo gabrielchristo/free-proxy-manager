@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.sources.base import CollectedProxy, ProxySourceBase
+from app.sources.proxyscrape import _parse_datetime, _parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,36 @@ class GeonodeSource(ProxySourceBase):
                     port=port,
                     protocol=protocol,
                     country_code=country_code,
+                    city=item.get("city"),
                     anonymity=anonymity,
+                    isp=item.get("isp"),
+                    asn=item.get("asn"),
+                    org=item.get("org"),
+                    source_latency_ms=_parse_float(item.get("latency")),
+                    source_uptime_percent=_parse_float(item.get("upTime")),
+                    source_speed=_parse_float(item.get("speed")),
+                    source_last_checked=_parse_datetime(item.get("lastChecked")),
+                    metadata={
+                        key: value
+                        for key, value in item.items()
+                        if key
+                        not in {
+                            "ip",
+                            "port",
+                            "protocols",
+                            "country",
+                            "city",
+                            "anonymityLevel",
+                            "isp",
+                            "asn",
+                            "org",
+                            "latency",
+                            "upTime",
+                            "speed",
+                            "lastChecked",
+                        }
+                    }
+                    or None,
                 )
             )
 

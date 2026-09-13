@@ -8,6 +8,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -65,7 +66,18 @@ class Proxy(Base):
 
     country: Mapped[str | None] = mapped_column(String(100))
     country_code: Mapped[str | None] = mapped_column(String(2))
+    city: Mapped[str | None] = mapped_column(String(100))
     anonymity: Mapped[str | None] = mapped_column(String(50))
+    isp: Mapped[str | None] = mapped_column(String(255))
+    asn: Mapped[str | None] = mapped_column(String(50))
+    org: Mapped[str | None] = mapped_column(String(255))
+    ssl: Mapped[bool | None] = mapped_column(Boolean)
+    source_latency_ms: Mapped[float | None] = mapped_column(Float)
+    source_uptime_percent: Mapped[float | None] = mapped_column(Float)
+    source_speed: Mapped[float | None] = mapped_column(Float)
+    source_last_checked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON)
 
     status: Mapped[ProxyStatus] = mapped_column(
         Enum(ProxyStatus, native_enum=False, length=20),
@@ -127,6 +139,7 @@ class ProxySourceLink(Base):
     last_seen: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    source_metadata: Mapped[dict | None] = mapped_column(JSON)
 
     proxy: Mapped["Proxy"] = relationship(back_populates="sources")
     source: Mapped["ProxySource"] = relationship(back_populates="proxies")

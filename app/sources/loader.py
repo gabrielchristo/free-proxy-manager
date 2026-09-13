@@ -5,6 +5,7 @@ from app.config import Settings, get_settings
 from app.sources.base import ProxySourceBase
 from app.sources.config import SourcesConfig, load_sources_config
 from app.sources.geonode import GeonodeSource
+from app.sources.proxycompass import ProxyCompassSource
 from app.sources.proxyscrape import ProxyScrapeSource
 from app.sources.text_list import TextListSource
 
@@ -68,6 +69,22 @@ def build_sources(config: SourcesConfig) -> list[ProxySourceBase]:
                     supported_protocols=frozenset(item.protocols),
                     page_size=item.page_size or 100,
                     max_pages=item.max_pages or 25,
+                )
+            )
+            continue
+
+        if item.type == "proxycompass":
+            if not item.protocols:
+                raise ValueError(f"Source {item.name} requires protocols")
+            built.append(
+                ProxyCompassSource(
+                    name=item.name,
+                    url=item.url,
+                    priority=item.priority,
+                    fetch_timeout=fetch_timeout,
+                    supported_protocols=frozenset(item.protocols),
+                    download_url=item.download_url,
+                    export_filter=item.export_filter,
                 )
             )
             continue

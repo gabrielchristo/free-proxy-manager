@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.datetime_utils import as_utc, utc_now
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
+from app.services.collector_helpers import apply_collected_fields, build_source_metadata
 from app.sources.base import CollectedProxy, ProxySourceBase
 from app.sources.loader import load_sources
 
@@ -96,9 +97,6 @@ class CollectorService:
                     host=item.host,
                     port=item.port,
                     protocol=item.protocol,
-                    country=item.country,
-                    country_code=item.country_code,
-                    anonymity=item.anonymity,
                     status=ProxyStatus.NEW,
                 )
                 db.add(proxy)
@@ -110,12 +108,8 @@ class CollectorService:
                 )
             else:
                 proxy.last_seen = now
-                if item.country:
-                    proxy.country = item.country
-                if item.country_code:
-                    proxy.country_code = item.country_code
-                if item.anonymity:
-                    proxy.anonymity = item.anonymity
+
+            apply_collected_fields(proxy, item)
 
             link = (
                 db.query(ProxySourceLink)
@@ -130,6 +124,7 @@ class CollectorService:
                 db.add(link)
             else:
                 link.last_seen = now
+            link.source_metadata = build_source_metadata(item)
 
             if is_new or proxy.status in {ProxyStatus.NEW, ProxyStatus.DEAD, ProxyStatus.DEGRADED}:
                 if proxy.cooldown_until is None or as_utc(proxy.cooldown_until) <= now:
