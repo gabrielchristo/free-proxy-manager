@@ -32,8 +32,8 @@
       "url": "https://proxylist.geonode.com/api/proxy-list",
       "priority": 85,
       "protocols": ["http", "https"],
-      "page_size": 100,
-      "max_pages": 25
+      "page_size": 50,
+      "max_pages": 10
     },
     {
       "name": "proxycompass",

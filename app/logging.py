@@ -11,6 +11,7 @@ COLORS = {
     "cyan": "\033[36m",
     "blue": "\033[34m",
     "magenta": "\033[35m",
+    "bright_magenta": "\033[1;35m",
     "gray": "\033[90m",
 }
 
@@ -43,6 +44,8 @@ class ColoredFormatter(logging.Formatter):
             return COLORS["cyan"]
         if "collection started" in text:
             return COLORS["blue"]
+        if "checker queue refilled" in text:
+            return COLORS["bright_magenta"]
         if "collection completed" in text or "discovered new proxy" in text:
             return COLORS["magenta"]
         if "cooldown" in text:

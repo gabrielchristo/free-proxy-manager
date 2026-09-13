@@ -1,13 +1,14 @@
 import asyncio
 import logging
+import random
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
-from app.datetime_utils import as_utc, utc_now
+from app.datetime_utils import format_log_datetime, utc_now
 from app.database import SessionLocal
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.services.checker import CheckerService, CheckResult
@@ -39,11 +40,13 @@ class CheckerJob:
         self.scorer = ScorerService(self.settings)
         self._workers: list[asyncio.Task] = []
         self._running = False
+        self._reserved_ids: set[int] = set()
 
     async def start(self) -> None:
         if self._running:
             return
         self._running = True
+        await self.checker.start()
         worker_count = self.settings.checker_concurrency
         self._workers = [
             asyncio.create_task(self._worker(index), name=f"checker-worker-{index}")
@@ -56,45 +59,210 @@ class CheckerJob:
         drained = self._drain_queue()
         if drained:
             logger.info("Checker queue drained: %s pending checks skipped", drained)
+        self._reserved_ids.clear()
         for worker in self._workers:
             worker.cancel()
         if self._workers:
             await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
+        await self.checker.close()
         logger.info("Checker workers stopped")
 
     def _drain_queue(self) -> int:
         drained = 0
         while True:
             try:
-                self.queue.get_nowait()
+                proxy_id = self.queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
+            if proxy_id is not None:
+                self._reserved_ids.discard(proxy_id)
             drained += 1
             self.queue.task_done()
         return drained
 
-    async def enqueue(self, proxy_ids: list[int]) -> None:
+    async def offer_proxies(self, proxy_ids: list[int]) -> int:
+        added = 0
         for proxy_id in proxy_ids:
-            await self.queue.put(proxy_id)
+            if self._offer_proxy(proxy_id):
+                added += 1
+        return added
 
-    async def enqueue_due_rechecks(self, db: Session) -> int:
-        now = utc_now()
-        due = (
-            db.query(Proxy.id)
-            .filter(
-                Proxy.status.in_(
-                    [ProxyStatus.HEALTHY, ProxyStatus.DEGRADED, ProxyStatus.DEAD]
-                ),
-                (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+    def _offer_proxy(self, proxy_id: int) -> bool:
+        if proxy_id in self._reserved_ids:
+            return False
+        try:
+            self.queue.put_nowait(proxy_id)
+        except asyncio.QueueFull:
+            return False
+        self._reserved_ids.add(proxy_id)
+        return True
+
+    async def refill_queue(self) -> int:
+        slots = self.settings.checker_queue_max_size - self.queue.qsize()
+        if slots <= 0:
+            return 0
+
+        batch = min(slots, self.settings.checker_enqueue_batch_size)
+        exclude = frozenset(self._reserved_ids)
+
+        def _load_ids() -> tuple[list[int], int, str]:
+            db = SessionLocal()
+            try:
+                self._recover_stuck_checking(db)
+                ids, last_checked = self._fetch_pending_check_ids(db, batch, exclude)
+                pending = self._count_pending_checks(db, exclude)
+                return ids, pending, last_checked
+            finally:
+                db.close()
+
+        proxy_ids, pending, last_checked = await asyncio.to_thread(_load_ids)
+        added = await self.offer_proxies(proxy_ids)
+
+        if added:
+            logger.info(
+                "Checker queue refilled added=%s queue=%s pending=%s last_checked=%s",
+                added,
+                self.queue.qsize(),
+                pending,
+                last_checked,
             )
-            .limit(self.settings.recheck_batch_size)
+        elif pending and self.queue.qsize() == 0:
+            logger.info(
+                "Checker queue empty with %s pending proxies waiting for slots",
+                pending,
+            )
+
+        return added
+
+    def prepare_recheck_cycle(self) -> list[int]:
+        db = SessionLocal()
+        try:
+            self._recover_stuck_checking(db)
+            return self._fetch_healthy_recheck_ids(db, self.settings.recheck_batch_size)
+        finally:
+            db.close()
+
+    @staticmethod
+    def _count_pending_checks(db: Session, exclude_ids: frozenset[int]) -> int:
+        now = utc_now()
+        query = db.query(func.count(Proxy.id)).filter(
+            Proxy.status.in_(
+                [ProxyStatus.NEW, ProxyStatus.DEGRADED, ProxyStatus.DEAD]
+            ),
+            (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+        )
+        if exclude_ids:
+            query = query.filter(~Proxy.id.in_(exclude_ids))
+        return int(query.scalar() or 0)
+
+    def _fetch_pending_check_ids(
+        self,
+        db: Session,
+        limit: int,
+        exclude_ids: frozenset[int],
+    ) -> tuple[list[int], str]:
+        now = utc_now()
+        collected: list[int] = []
+        selected_rows: list[tuple[int, datetime | None]] = []
+        seen = set(exclude_ids)
+
+        def take(statuses: list[ProxyStatus], *, cooldown_only: bool = False) -> None:
+            nonlocal collected, selected_rows
+            remaining = limit - len(collected)
+            if remaining <= 0:
+                return
+
+            query = db.query(Proxy).filter(Proxy.status.in_(statuses))
+            if cooldown_only:
+                query = query.filter(
+                    (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now)
+                )
+            if seen:
+                query = query.filter(~Proxy.id.in_(seen))
+
+            picked = self._pick_random_proxy_rows(query, remaining)
+            for proxy_id, last_checked in picked:
+                collected.append(proxy_id)
+                selected_rows.append((proxy_id, last_checked))
+                seen.add(proxy_id)
+
+        take([ProxyStatus.NEW])
+        take([ProxyStatus.DEGRADED])
+        take([ProxyStatus.DEAD], cooldown_only=True)
+        return collected, self._format_last_checked_range(selected_rows)
+
+    def _fetch_healthy_recheck_ids(self, db: Session, limit: int) -> list[int]:
+        now = utc_now()
+        query = db.query(Proxy).filter(
+            Proxy.status == ProxyStatus.HEALTHY,
+            (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+        )
+        return [
+            proxy_id
+            for proxy_id, _ in self._pick_random_proxy_rows(query, limit)
+        ]
+
+    def _pick_random_proxy_rows(
+        self,
+        query,
+        limit: int,
+    ) -> list[tuple[int, datetime | None]]:
+        if limit <= 0:
+            return []
+
+        pool_size = max(limit, self.settings.checker_selection_pool_size)
+        rows = (
+            query.with_entities(Proxy.id, Proxy.last_checked)
+            .order_by(Proxy.last_checked.asc().nullsfirst(), Proxy.id.asc())
+            .limit(pool_size)
             .all()
         )
-        ids = [row[0] for row in due]
-        await self.enqueue(ids)
-        logger.info("Recheck enqueued proxies=%s", len(ids))
-        return len(ids)
+        if not rows:
+            return []
+
+        candidates = list(rows)
+        random.shuffle(candidates)
+        return candidates[:limit]
+
+    @staticmethod
+    def _format_last_checked_range(
+        rows: list[tuple[int, datetime | None]],
+    ) -> str:
+        if not rows:
+            return "n/a"
+
+        times = [last_checked for _, last_checked in rows if last_checked is not None]
+        if not times:
+            return "never"
+
+        oldest = min(times)
+        newest = max(times)
+        if oldest == newest:
+            return format_log_datetime(oldest)
+        return f"{format_log_datetime(oldest)} .. {format_log_datetime(newest)}"
+
+    def _recover_stuck_checking(self, db: Session) -> list[int]:
+        cutoff = utc_now() - timedelta(seconds=self.settings.check_timeout * 3)
+        rows = (
+            db.query(Proxy.id)
+            .filter(
+                Proxy.status == ProxyStatus.CHECKING,
+                Proxy.updated_at < cutoff,
+            )
+            .all()
+        )
+        stuck_ids = [row[0] for row in rows]
+        if not stuck_ids:
+            return []
+
+        db.query(Proxy).filter(Proxy.id.in_(stuck_ids)).update(
+            {Proxy.status: ProxyStatus.DEGRADED},
+            synchronize_session=False,
+        )
+        db.commit()
+        logger.warning("Recovered %s proxies stuck in CHECKING", len(stuck_ids))
+        return stuck_ids
 
     async def _worker(self, worker_id: int) -> None:
         while True:
@@ -106,10 +274,12 @@ class CheckerJob:
             except Exception:
                 logger.exception("Checker worker %s failed for proxy_id=%s", worker_id, proxy_id)
             finally:
+                if proxy_id is not None:
+                    self._reserved_ids.discard(proxy_id)
                 self.queue.task_done()
 
     async def _check_proxy(self, proxy_id: int) -> None:
-        target = self._mark_checking(proxy_id)
+        target = await asyncio.to_thread(self._mark_checking, proxy_id)
         if target is None:
             return
 
@@ -118,12 +288,20 @@ class CheckerJob:
             target.source_label,
             target.url,
         )
-        result = await self.checker.check_proxy(
-            host=target.host,
-            port=target.port,
-            protocol=target.protocol,
-        )
-        self._persist_result(target, result)
+        hard_timeout = self.settings.check_timeout + 5
+        try:
+            result = await asyncio.wait_for(
+                self.checker.check_proxy(
+                    host=target.host,
+                    port=target.port,
+                    protocol=target.protocol,
+                ),
+                timeout=hard_timeout,
+            )
+        except TimeoutError:
+            result = CheckResult(success=False, error="timeout")
+
+        await asyncio.to_thread(self._persist_result, target, result)
 
     def _mark_checking(self, proxy_id: int) -> ProxyCheckTarget | None:
         db = SessionLocal()

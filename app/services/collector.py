@@ -1,9 +1,11 @@
+import asyncio
 import logging
 
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.datetime_utils import as_utc, utc_now
+from app.database import SessionLocal
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.services.collector_helpers import apply_collected_fields, build_source_metadata
 from app.sources.base import CollectedProxy, ProxySourceBase
@@ -17,24 +19,32 @@ class CollectorService:
         self.settings = settings or get_settings()
         self.sources = load_sources(self.settings)
 
-    async def collect_all(self, db: Session) -> list[int]:
+    async def collect_all(self) -> list[int]:
         """Collect from all enabled sources and return proxy IDs queued for checking."""
         queued_ids: list[int] = []
 
         for source in self.sources:
-            db_source = self._get_or_create_source(db, source)
-            if not db_source.enabled:
-                logger.info("[%s] Source disabled in database, skipping", source.name)
-                continue
+            db = SessionLocal()
+            try:
+                db_source = self._get_or_create_source(db, source)
+                if not db_source.enabled:
+                    logger.info("[%s] Source disabled in database, skipping", source.name)
+                    continue
+                db_source.last_run = utc_now()
+                db.commit()
+            finally:
+                db.close()
 
-            db_source.last_run = utc_now()
             logger.info("[%s] Collection started url=%s", source.name, source.url)
             try:
                 collected = await source.collect()
-                db_source.last_success = utc_now()
-                db_source.last_error = None
-                db_source.proxies_found = len(collected)
-                new_ids = self._persist_collected(db, db_source, collected)
+                new_ids = await asyncio.to_thread(
+                    self.persist_collected_for_source,
+                    source.name,
+                    source.url,
+                    source.priority,
+                    collected,
+                )
                 queued_ids.extend(new_ids)
                 logger.info(
                     "[%s] Collection completed proxies=%s queued=%s",
@@ -43,11 +53,57 @@ class CollectorService:
                     len(new_ids),
                 )
             except Exception as exc:
-                db_source.last_error = str(exc)
+                self._record_source_error(source.name, str(exc))
                 logger.exception("[%s] Collection failed", source.name)
 
-        db.commit()
         return queued_ids
+
+    def persist_collected_for_source(
+        self,
+        source_name: str,
+        source_url: str,
+        source_priority: int,
+        collected: list[CollectedProxy],
+    ) -> list[int]:
+        db = SessionLocal()
+        try:
+            db_source = (
+                db.query(ProxySource).filter(ProxySource.name == source_name).one_or_none()
+            )
+            if db_source is None:
+                db_source = ProxySource(
+                    name=source_name,
+                    url=source_url,
+                    enabled=True,
+                    priority=source_priority,
+                )
+                db.add(db_source)
+                db.flush()
+            else:
+                db_source.url = source_url
+                db_source.priority = source_priority
+
+            db_source.last_success = utc_now()
+            db_source.last_error = None
+            db_source.proxies_found = len(collected)
+            queued_ids = self._persist_collected(db, db_source, collected)
+            db.commit()
+            return queued_ids
+        finally:
+            db.close()
+
+    def _record_source_error(self, source_name: str, error: str) -> None:
+        db = SessionLocal()
+        try:
+            db_source = (
+                db.query(ProxySource).filter(ProxySource.name == source_name).one_or_none()
+            )
+            if db_source is None:
+                return
+            db_source.last_error = error
+            db.commit()
+        finally:
+            db.close()
 
     def _get_or_create_source(self, db: Session, source: ProxySourceBase) -> ProxySource:
         db_source = db.query(ProxySource).filter(ProxySource.name == source.name).one_or_none()

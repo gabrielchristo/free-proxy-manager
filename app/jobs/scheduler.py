@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 class JobScheduler:
     def __init__(self) -> None:
         self.settings = get_settings()
-        self.queue: asyncio.Queue[int | None] = asyncio.Queue()
+        self.queue: asyncio.Queue[int | None] = asyncio.Queue(
+            maxsize=self.settings.checker_queue_max_size
+        )
         self.checker_job = CheckerJob(self.queue, self.settings)
         self.collector_job = CollectorJob()
         self.cleanup_job = CleanupJob(self.settings)
@@ -27,6 +29,7 @@ class JobScheduler:
     async def start(self) -> None:
         await self.checker_job.start()
         self._tasks = [
+            asyncio.create_task(self._checker_refill_loop(), name="checker-refill-loop"),
             asyncio.create_task(self._collector_loop(), name="collector-loop"),
             asyncio.create_task(self._recheck_loop(), name="recheck-loop"),
             asyncio.create_task(self._cleanup_loop(), name="cleanup-loop"),
@@ -50,44 +53,54 @@ class JobScheduler:
         logger.info("Background jobs stopped")
 
     async def _run_initial_cycle(self) -> None:
-        queued_ids = await self.collector_job.run()
-        await self.checker_job.enqueue(queued_ids)
+        await self.collector_job.run()
+        await self.checker_job.refill_queue()
+
+    async def _checker_refill_loop(self) -> None:
+        while True:
+            await self.checker_job.refill_queue()
+            await asyncio.sleep(self.settings.checker_refill_interval)
 
     async def _collector_loop(self) -> None:
         while True:
             await asyncio.sleep(self.settings.collect_interval)
-            queued_ids = await self.collector_job.run()
-            await self.checker_job.enqueue(queued_ids)
+            await self.collector_job.run()
 
     async def _recheck_loop(self) -> None:
         while True:
             await asyncio.sleep(self.settings.recheck_interval)
-            db = SessionLocal()
-            try:
-                count = await self.checker_job.enqueue_due_rechecks(db)
-                logger.info("Recheck enqueued proxies=%s", count)
-            finally:
-                db.close()
+            proxy_ids = await asyncio.to_thread(self.checker_job.prepare_recheck_cycle)
+            added = await self.checker_job.offer_proxies(proxy_ids)
+            logger.info("Recheck offered proxies=%s added=%s", len(proxy_ids), added)
 
     async def _cleanup_loop(self) -> None:
         while True:
             await asyncio.sleep(self.settings.cleanup_interval)
-            db = SessionLocal()
-            try:
-                self.cleanup_job.run(db)
-            finally:
-                db.close()
+            removed = await asyncio.to_thread(self._run_cleanup_job)
+            if removed:
+                logger.info("Cleanup removed %s stale proxies", removed)
 
     async def _score_loop(self) -> None:
         while True:
             await asyncio.sleep(self.settings.score_interval)
-            db = SessionLocal()
-            try:
-                self.score_job.run(db)
-            finally:
-                db.close()
+            updated = await asyncio.to_thread(self._run_score_job)
+            logger.info("Score recalculation completed for %s proxies", updated)
 
     async def _checkpoint_loop(self) -> None:
         while True:
             await asyncio.sleep(self.settings.db_checkpoint_interval)
-            self.checkpoint_job.run()
+            await asyncio.to_thread(self.checkpoint_job.run)
+
+    def _run_cleanup_job(self) -> int:
+        db = SessionLocal()
+        try:
+            return self.cleanup_job.run(db)
+        finally:
+            db.close()
+
+    def _run_score_job(self) -> int:
+        db = SessionLocal()
+        try:
+            return self.score_job.run(db)
+        finally:
+            db.close()

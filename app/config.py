@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     api_port: int = Field(ge=1, le=65535)
 
     checker_concurrency: int = Field(ge=1, le=500)
+    checker_queue_max_size: int = Field(ge=1)
+    checker_enqueue_batch_size: int = Field(ge=1)
+    checker_refill_interval: int = Field(ge=1)
+    checker_selection_pool_size: int = Field(default=500, ge=1)
     check_timeout: float = Field(ge=1.0, le=60.0)
     check_url: str
     check_allowed_hosts: Annotated[frozenset[str], NoDecode]
@@ -34,6 +38,7 @@ class Settings(BaseSettings):
     cleanup_interval: int = Field(ge=300)
     score_interval: int = Field(ge=60)
     recheck_batch_size: int = Field(ge=1)
+    score_batch_size: int = Field(ge=1)
 
     failure_threshold: int = Field(ge=1)
     cooldown_initial: int = Field(ge=60)

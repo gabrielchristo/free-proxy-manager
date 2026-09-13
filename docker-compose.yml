@@ -9,6 +9,10 @@ services:
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    environment:
+      MALLOC_ARENA_MAX: "2"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:$$API_PORT/health"]
       interval: ${DOCKER_HEALTHCHECK_INTERVAL}
