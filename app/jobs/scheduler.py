@@ -59,7 +59,7 @@ class JobScheduler:
             db = SessionLocal()
             try:
                 count = await self.checker_job.enqueue_due_rechecks(db)
-                logger.info("Recheck queued %s proxies", count)
+                logger.info("Recheck enqueued proxies=%s", count)
             finally:
                 db.close()
 

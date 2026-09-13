@@ -1,6 +1,5 @@
-from datetime import UTC, datetime
-
 from app.config import Settings, get_settings
+from app.datetime_utils import as_utc, utc_now
 from app.models import Proxy
 
 
@@ -21,8 +20,8 @@ class ScorerService:
             )
 
         recency_score = 0.0
-        if proxy.last_success:
-            age_hours = (datetime.now(UTC) - proxy.last_success).total_seconds() / 3600
+        if proxy.last_success is not None:
+            age_hours = (utc_now() - as_utc(proxy.last_success)).total_seconds() / 3600
             recency_score = max(0.0, self.settings.scorer_recency_max - age_hours)
 
         stability_penalty = proxy.consecutive_failures * self.settings.scorer_failure_penalty

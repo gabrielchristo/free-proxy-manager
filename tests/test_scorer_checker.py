@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 
 from app.config import get_settings
 from app.services.checker import CheckerService
@@ -61,3 +62,21 @@ def test_scorer_prefers_https_over_http_with_same_metrics():
     https_proxy = Proxy(protocol=settings.scorer_https_protocol, **base_kwargs)
 
     assert scorer.calculate(https_proxy) > scorer.calculate(http_proxy)
+
+
+def test_scorer_handles_naive_last_success():
+    settings = get_settings()
+    scorer = ScorerService(settings)
+    proxy = Proxy(
+        host="1.1.1.1",
+        port=8080,
+        protocol="http",
+        status=ProxyStatus.HEALTHY,
+        success_count=5,
+        failure_count=0,
+        consecutive_failures=0,
+        latency_ms=100,
+        last_success=datetime(2026, 3, 22, 12, 0, 0),
+    )
+
+    assert scorer.calculate(proxy) >= 0

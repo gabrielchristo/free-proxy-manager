@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
+from app.datetime_utils import as_utc, utc_now
 from app.database import SessionLocal
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.services.checker import CheckerService, CheckResult
@@ -63,7 +64,7 @@ class CheckerJob:
             await self.queue.put(proxy_id)
 
     async def enqueue_due_rechecks(self, db: Session) -> int:
-        now = datetime.now(UTC)
+        now = utc_now()
         due = (
             db.query(Proxy.id)
             .filter(
@@ -198,7 +199,7 @@ class CheckerJob:
         return ", ".join(row[0] for row in rows)
 
     def _apply_result(self, proxy: Proxy, result: CheckResult) -> None:
-        now = datetime.now(UTC)
+        now = utc_now()
         proxy.last_checked = now
         proxy.last_http_status = result.http_status
         proxy.latency_ms = result.latency_ms

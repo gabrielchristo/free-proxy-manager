@@ -1,9 +1,9 @@
 import logging
-from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
+from app.datetime_utils import as_utc, utc_now
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.sources.base import CollectedProxy, ProxySourceBase
 from app.sources.loader import load_sources
@@ -26,11 +26,11 @@ class CollectorService:
                 logger.info("[%s] Source disabled in database, skipping", source.name)
                 continue
 
-            db_source.last_run = datetime.now(UTC)
+            db_source.last_run = utc_now()
             logger.info("[%s] Collection started url=%s", source.name, source.url)
             try:
                 collected = await source.collect()
-                db_source.last_success = datetime.now(UTC)
+                db_source.last_success = utc_now()
                 db_source.last_error = None
                 db_source.proxies_found = len(collected)
                 new_ids = self._persist_collected(db, db_source, collected)
@@ -70,7 +70,7 @@ class CollectorService:
         db_source: ProxySource,
         collected: list[CollectedProxy],
     ) -> list[int]:
-        now = datetime.now(UTC)
+        now = utc_now()
         queued_ids: list[int] = []
         seen: set[tuple[str, str, int]] = set()
 
@@ -132,7 +132,7 @@ class CollectorService:
                 link.last_seen = now
 
             if is_new or proxy.status in {ProxyStatus.NEW, ProxyStatus.DEAD, ProxyStatus.DEGRADED}:
-                if proxy.cooldown_until is None or proxy.cooldown_until <= now:
+                if proxy.cooldown_until is None or as_utc(proxy.cooldown_until) <= now:
                     queued_ids.append(proxy.id)
 
         return queued_ids

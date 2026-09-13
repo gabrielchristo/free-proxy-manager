@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     database_url: str
     log_level: str
     log_format: str
+    log_color_enabled: bool
     api_host: str
     api_port: int = Field(ge=1, le=65535)
 
