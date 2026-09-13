@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.schemas.proxy import ProxyListResponse, ProxyResponse, StatsResponse
 from app.services.pool import PoolService
 
 router = APIRouter(tags=["proxies"])
-pool_service = PoolService()
+settings = get_settings()
+pool_service = PoolService(settings)
 
 
 @router.get("/proxy", response_model=ProxyResponse)
@@ -16,7 +18,7 @@ def get_proxy(
     country_code: str | None = Query(default=None, min_length=2, max_length=2),
     max_latency: float | None = Query(default=None, ge=0),
     anonymous: bool | None = Query(default=None),
-    min_score: float | None = Query(default=None, ge=0, le=100),
+    min_score: float | None = Query(default=None, ge=0, le=settings.api_max_score),
     db: Session = Depends(get_db),
 ) -> ProxyResponse:
     proxy = pool_service.get_best_proxy(
@@ -35,7 +37,11 @@ def get_proxy(
 
 @router.get("/proxies", response_model=ProxyListResponse)
 def list_proxies(
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(
+        default=settings.api_default_limit,
+        ge=1,
+        le=settings.api_max_limit,
+    ),
     offset: int = Query(default=0, ge=0),
     protocol: str | None = Query(default=None),
     country: str | None = Query(default=None),
@@ -43,7 +49,7 @@ def list_proxies(
     status: str | None = Query(default=None),
     max_latency: float | None = Query(default=None, ge=0),
     anonymous: bool | None = Query(default=None),
-    min_score: float | None = Query(default=None, ge=0, le=100),
+    min_score: float | None = Query(default=None, ge=0, le=settings.api_max_score),
     db: Session = Depends(get_db),
 ) -> ProxyListResponse:
     total, items = pool_service.list_proxies(

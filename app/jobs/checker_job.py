@@ -70,7 +70,7 @@ class CheckerJob:
                 ),
                 (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
             )
-            .limit(500)
+            .limit(self.settings.recheck_batch_size)
             .all()
         )
         ids = [row[0] for row in due]
@@ -167,7 +167,7 @@ class CheckerJob:
 
         if proxy.consecutive_failures >= self.settings.failure_threshold:
             proxy.status = ProxyStatus.DEAD
-            proxy.cooldown_level = min(proxy.cooldown_level + 1, 5)
+            proxy.cooldown_level = min(proxy.cooldown_level + 1, self.settings.cooldown_max_level)
             cooldown_seconds = min(
                 self.settings.cooldown_initial * (2 ** (proxy.cooldown_level - 1)),
                 self.settings.cooldown_max,

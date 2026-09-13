@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,33 +11,80 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "free-proxy-manager"
-    database_url: str = "sqlite:///./data/proxies.db"
+    app_name: str
+    database_url: str
+    log_level: str
+    log_format: str
+    api_host: str
+    api_port: int = Field(ge=1, le=65535)
 
-    checker_concurrency: int = Field(default=50, ge=1, le=500)
-    check_timeout: float = Field(default=5.0, ge=1.0, le=60.0)
-    check_url: str = "https://www.google.com/"
+    checker_concurrency: int = Field(ge=1, le=500)
+    check_timeout: float = Field(ge=1.0, le=60.0)
+    check_url: str
+    check_allowed_hosts: frozenset[str]
+    check_allowed_schemes: frozenset[str]
+    check_success_status_min: int = Field(ge=100, le=599)
+    check_success_status_max: int = Field(ge=100, le=599)
+    check_follow_redirects: bool
 
-    collect_interval: int = Field(default=900, ge=60)
-    recheck_interval: int = Field(default=300, ge=60)
-    cleanup_interval: int = Field(default=3600, ge=300)
-    score_interval: int = Field(default=300, ge=60)
+    collect_interval: int = Field(ge=60)
+    recheck_interval: int = Field(ge=60)
+    cleanup_interval: int = Field(ge=300)
+    score_interval: int = Field(ge=60)
+    recheck_batch_size: int = Field(ge=1)
 
-    failure_threshold: int = Field(default=3, ge=1)
-    cooldown_initial: int = Field(default=300, ge=60)
-    cooldown_max: int = Field(default=7200, ge=300)
+    failure_threshold: int = Field(ge=1)
+    cooldown_initial: int = Field(ge=60)
+    cooldown_max: int = Field(ge=300)
+    cooldown_max_level: int = Field(ge=1)
 
-    proxyscrape_url: str = (
-        "https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/all/data.json"
+    pool_min_score: float = Field(ge=0.0)
+    pool_top_candidates: int = Field(ge=1)
+    pool_selection_min_weight: float = Field(ge=0.1)
+
+    api_default_limit: int = Field(ge=1)
+    api_max_limit: int = Field(ge=1)
+    api_max_score: float = Field(ge=0.0, le=100.0)
+
+    cleanup_stale_days: int = Field(ge=1)
+
+    db_pool_size: int = Field(ge=1)
+    db_pool_max_overflow: int = Field(ge=0)
+    db_pool_timeout: int = Field(ge=1)
+    db_sqlite_timeout: int = Field(ge=1)
+
+    proxyscrape_enabled: bool
+    proxyscrape_name: str
+    proxyscrape_url: str
+    proxyscrape_priority: int
+    source_fetch_timeout: float = Field(ge=1.0, le=120.0)
+    supported_protocols: frozenset[str]
+
+    anonymous_exclude_value: str
+
+    scorer_success_weight: float = Field(ge=0.0)
+    scorer_latency_max: float = Field(ge=0.0)
+    scorer_latency_divisor: float = Field(ge=1.0)
+    scorer_recency_max: float = Field(ge=0.0)
+    scorer_failure_penalty: float = Field(ge=0.0)
+    scorer_history_cap: int = Field(ge=0)
+    scorer_score_max: float = Field(ge=1.0)
+
+    @field_validator(
+        "check_allowed_hosts",
+        "check_allowed_schemes",
+        "supported_protocols",
+        mode="before",
     )
-    proxyscrape_enabled: bool = True
-    proxyscrape_priority: int = 100
-
-    log_level: str = "INFO"
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
-
-    pool_min_score: float = Field(default=10.0, ge=0.0)
+    @classmethod
+    def parse_csv_set(cls, value: object) -> frozenset[str]:
+        if isinstance(value, frozenset):
+            return value
+        if isinstance(value, (set, list, tuple)):
+            return frozenset(str(item).strip() for item in value if str(item).strip())
+        if isinstance(value, str):
+            return frozenset(item.strip() for item in value.split(",") if item.strip())
+        raise TypeError("Expected comma-separated string or collection")
 
 
 @lru_cache

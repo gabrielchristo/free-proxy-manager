@@ -10,7 +10,7 @@ class Base(DeclarativeBase):
     pass
 
 
-def _configure_sqlite(engine) -> None:
+def _configure_sqlite(engine, busy_timeout: int) -> None:
     if engine.dialect.name != "sqlite":
         return
 
@@ -19,19 +19,20 @@ def _configure_sqlite(engine) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute(f"PRAGMA busy_timeout={busy_timeout}")
         cursor.close()
 
 
 settings = get_settings()
 engine = create_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False, "timeout": 30},
+    connect_args={"check_same_thread": False, "timeout": settings.db_sqlite_timeout},
     pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=max(10, settings.checker_concurrency // 2),
-    pool_timeout=30,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_pool_max_overflow,
+    pool_timeout=settings.db_pool_timeout,
 )
-_configure_sqlite(engine)
+_configure_sqlite(engine, settings.db_sqlite_timeout * 1000)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 

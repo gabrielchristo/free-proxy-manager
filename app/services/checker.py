@@ -21,17 +21,15 @@ class CheckResult:
 
 
 class CheckerService:
-    ALLOWED_HOSTS = {"www.google.com", "google.com"}
-
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
     def validate_check_url(self, url: str | None = None) -> str:
         target = url or self.settings.check_url
         parsed = urlparse(target)
-        if parsed.scheme not in {"http", "https"}:
+        if parsed.scheme not in self.settings.check_allowed_schemes:
             raise ValueError(f"Unsupported check URL scheme: {parsed.scheme}")
-        if parsed.hostname not in self.ALLOWED_HOSTS:
+        if parsed.hostname not in self.settings.check_allowed_hosts:
             raise ValueError(
                 f"Check URL host '{parsed.hostname}' is not in the allowlist"
             )
@@ -57,7 +55,7 @@ class CheckerService:
             async with httpx.AsyncClient(
                 proxy=proxy_url,
                 timeout=timeout,
-                follow_redirects=True,
+                follow_redirects=self.settings.check_follow_redirects,
                 verify=True,
             ) as client:
                 response = await client.get(check_url)
@@ -72,7 +70,12 @@ class CheckerService:
 
         elapsed_ms = (datetime.now(UTC) - started).total_seconds() * 1000
         requires_auth = response.status_code == 407
-        success = 200 <= response.status_code < 400 and not requires_auth
+        success = (
+            self.settings.check_success_status_min
+            <= response.status_code
+            <= self.settings.check_success_status_max
+            and not requires_auth
+        )
 
         return CheckResult(
             success=success,

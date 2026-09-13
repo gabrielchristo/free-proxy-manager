@@ -14,7 +14,7 @@ class CleanupJob:
         self.settings = settings or get_settings()
 
     def run(self, db: Session) -> int:
-        cutoff = datetime.now(UTC) - timedelta(days=7)
+        cutoff = datetime.now(UTC) - timedelta(days=self.settings.cleanup_stale_days)
         stale = (
             db.query(Proxy)
             .filter(

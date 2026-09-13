@@ -14,24 +14,28 @@ class ScorerService:
 
         latency_score = 0.0
         if proxy.latency_ms is not None:
-            latency_score = max(0.0, 40.0 - (proxy.latency_ms / 50.0))
+            latency_score = max(
+                0.0,
+                self.settings.scorer_latency_max
+                - (proxy.latency_ms / self.settings.scorer_latency_divisor),
+            )
 
         recency_score = 0.0
         if proxy.last_success:
             age_hours = (datetime.now(UTC) - proxy.last_success).total_seconds() / 3600
-            recency_score = max(0.0, 20.0 - age_hours)
+            recency_score = max(0.0, self.settings.scorer_recency_max - age_hours)
 
-        stability_penalty = proxy.consecutive_failures * 10.0
-        history_bonus = min(proxy.success_count, 20)
+        stability_penalty = proxy.consecutive_failures * self.settings.scorer_failure_penalty
+        history_bonus = min(proxy.success_count, self.settings.scorer_history_cap)
 
         score = (
-            success_rate * 40.0
+            success_rate * self.settings.scorer_success_weight
             + latency_score
             + recency_score
             + history_bonus
             - stability_penalty
         )
-        return round(max(0.0, min(100.0, score)), 2)
+        return round(max(0.0, min(self.settings.scorer_score_max, score)), 2)
 
     def apply_to_proxy(self, proxy: Proxy) -> float:
         proxy.score = self.calculate(proxy)

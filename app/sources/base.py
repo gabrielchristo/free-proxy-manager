@@ -14,7 +14,7 @@ class CollectedProxy:
 class ProxySourceBase:
     name: str
     url: str
-    priority: int = 100
+    priority: int
 
     async def collect(self) -> list[CollectedProxy]:
         raise NotImplementedError

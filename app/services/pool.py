@@ -53,18 +53,24 @@ class PoolService:
             min_score=min_score or self.settings.pool_min_score,
         )
 
-        candidates = query.order_by(Proxy.score.desc(), Proxy.latency_ms.asc()).limit(25).all()
+        candidates = (
+            query.order_by(Proxy.score.desc(), Proxy.latency_ms.asc())
+            .limit(self.settings.pool_top_candidates)
+            .all()
+        )
         if not candidates:
             return None
 
-        weights = [max(proxy.score, 1.0) for proxy in candidates]
+        weights = [
+            max(proxy.score, self.settings.pool_selection_min_weight) for proxy in candidates
+        ]
         return random.choices(candidates, weights=weights, k=1)[0]
 
     def list_proxies(
         self,
         db: Session,
         *,
-        limit: int = 20,
+        limit: int | None = None,
         offset: int = 0,
         protocol: str | None = None,
         country: str | None = None,
@@ -74,6 +80,7 @@ class PoolService:
         anonymous: bool | None = None,
         min_score: float | None = None,
     ) -> tuple[int, list[ProxyListItem]]:
+        page_limit = limit or self.settings.api_default_limit
         query = db.query(Proxy)
         if status:
             query = query.filter(Proxy.status == ProxyStatus(status))
@@ -94,7 +101,7 @@ class PoolService:
         rows = (
             query.order_by(Proxy.score.desc(), Proxy.latency_ms.asc())
             .offset(offset)
-            .limit(limit)
+            .limit(page_limit)
             .all()
         )
         return total, [self._to_list_item(proxy) for proxy in rows]
@@ -227,8 +234,8 @@ class PoolService:
             last_checked=proxy.last_checked,
         )
 
-    @staticmethod
     def _apply_filters(
+        self,
         query,
         *,
         protocol: str | None,
@@ -247,7 +254,10 @@ class PoolService:
         if max_latency is not None:
             query = query.filter(Proxy.latency_ms.isnot(None), Proxy.latency_ms <= max_latency)
         if anonymous is True:
-            query = query.filter(Proxy.anonymity.isnot(None), Proxy.anonymity != "transparent")
+            query = query.filter(
+                Proxy.anonymity.isnot(None),
+                Proxy.anonymity != self.settings.anonymous_exclude_value,
+            )
         if min_score is not None:
             query = query.filter(Proxy.score >= min_score)
         return query

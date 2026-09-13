@@ -2,22 +2,29 @@ import logging
 
 import httpx
 
+from app.config import Settings, get_settings
 from app.sources.base import CollectedProxy, ProxySourceBase
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_PROTOCOLS = {"http", "https"}
-
 
 class ProxyScrapeSource(ProxySourceBase):
-    name = "proxyscrape"
-
-    def __init__(self, url: str, priority: int = 100) -> None:
+    def __init__(
+        self,
+        name: str,
+        url: str,
+        priority: int,
+        fetch_timeout: float,
+        supported_protocols: frozenset[str],
+    ) -> None:
+        self.name = name
         self.url = url
         self.priority = priority
+        self.fetch_timeout = fetch_timeout
+        self.supported_protocols = supported_protocols
 
     async def collect(self) -> list[CollectedProxy]:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=self.fetch_timeout) as client:
             response = await client.get(self.url)
             response.raise_for_status()
             payload = response.json()
@@ -31,7 +38,7 @@ class ProxyScrapeSource(ProxySourceBase):
                 continue
 
             protocol = str(item.get("protocol", "")).lower().strip()
-            if protocol not in SUPPORTED_PROTOCOLS:
+            if protocol not in self.supported_protocols:
                 continue
 
             host = str(item.get("ip", "")).strip()
@@ -58,5 +65,5 @@ class ProxyScrapeSource(ProxySourceBase):
                 )
             )
 
-        logger.info("ProxyScrape collected %s HTTP/HTTPS proxies", len(proxies))
+        logger.info("%s collected %s supported proxies", self.name, len(proxies))
         return proxies

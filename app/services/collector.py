@@ -21,8 +21,11 @@ class CollectorService:
         if self.settings.proxyscrape_enabled:
             sources.append(
                 ProxyScrapeSource(
+                    name=self.settings.proxyscrape_name,
                     url=self.settings.proxyscrape_url,
                     priority=self.settings.proxyscrape_priority,
+                    fetch_timeout=self.settings.source_fetch_timeout,
+                    supported_protocols=self.settings.supported_protocols,
                 )
             )
         return sources

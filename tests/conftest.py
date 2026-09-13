@@ -1,11 +1,22 @@
+from pathlib import Path
+
 import pytest
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base, get_db
-from app.main import app
+ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env.example")
+load_dotenv(ROOT / ".env", override=True)
+
+from app.config import get_settings  # noqa: E402
+
+get_settings.cache_clear()
+
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture
