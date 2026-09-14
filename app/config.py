@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     check_success_status_min: int = Field(ge=100, le=599)
     check_success_status_max: int = Field(ge=100, le=599)
     check_follow_redirects: bool
+    check_ssl_verify: bool = False
+    check_https_proxy_as_http: bool = True
     connectivity_check_enabled: bool = True
     connectivity_check_interval: int = Field(default=30, ge=5)
 

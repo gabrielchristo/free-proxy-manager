@@ -85,16 +85,20 @@ class CollectorService:
                 db_source.url = source_url
                 db_source.priority = source_priority
 
+            source_id = db_source.id
+
             queued_ids = self._persist_collected(
                 db,
-                db_source.id,
+                source_id,
                 db_source.name,
                 collected,
             )
+
+            db_source = db.query(ProxySource).filter(ProxySource.id == source_id).one()
             db_source.last_success = utc_now()
             db_source.last_error = None
             db_source.proxies_found = len(collected)
-            db_source.total_proxies_found = self._count_source_links(db, db_source.id)
+            db_source.total_proxies_found = self._count_source_links(db, source_id)
             db.commit()
             return queued_ids
         finally:

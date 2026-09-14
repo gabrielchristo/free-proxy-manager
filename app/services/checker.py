@@ -105,6 +105,7 @@ class CheckerService:
         concurrency = self.settings.checker_concurrency
         self._transport_pool = ProxyTransportPool(
             max_size=self.settings.checker_transport_pool_size,
+            verify=self.settings.check_ssl_verify,
             limits=httpx.Limits(
                 max_connections=1,
                 max_keepalive_connections=0,
@@ -115,7 +116,7 @@ class CheckerService:
             transport=transport,
             timeout=self._timeout,
             follow_redirects=self.settings.check_follow_redirects,
-            verify=True,
+            verify=self.settings.check_ssl_verify,
         )
 
     async def close(self) -> None:
@@ -139,6 +140,13 @@ class CheckerService:
             )
         return target
 
+    def proxy_connect_url(self, host: str, port: int, protocol: str) -> str:
+        """Build the proxy URL used for HTTP checks."""
+        connect_protocol = protocol.lower()
+        if self.settings.check_https_proxy_as_http and connect_protocol == "https":
+            connect_protocol = "http"
+        return f"{connect_protocol}://{host}:{port}"
+
     async def check_proxy(
         self,
         host: str,
@@ -147,7 +155,7 @@ class CheckerService:
     ) -> CheckResult:
         """Probe one proxy against the configured check URL."""
         check_url = self.validate_check_url()
-        proxy_url = f"{protocol}://{host}:{port}"
+        proxy_url = self.proxy_connect_url(host, port, protocol)
         started = datetime.now(UTC)
 
         if self._client is None:
@@ -155,7 +163,7 @@ class CheckerService:
                 proxy=proxy_url,
                 timeout=self._timeout,
                 follow_redirects=self.settings.check_follow_redirects,
-                verify=True,
+                verify=self.settings.check_ssl_verify,
             ) as client:
                 return await self._perform_check(client, check_url, started)
 
