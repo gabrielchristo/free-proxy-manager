@@ -16,6 +16,24 @@ from client_lib.models import (
 )
 
 
+def format_manager_error(
+    exc: httpx.HTTPError,
+    manager_url: str,
+    *,
+    path: str = "",
+) -> str:
+    target = f"{manager_url.rstrip('/')}{path}"
+    if isinstance(exc, httpx.ConnectError):
+        return (
+            f"Cannot connect to {target}.\n\n"
+            "Check that free-proxy-manager is running and the Manager URL is correct "
+            "(default: http://localhost:9321)."
+        )
+    if isinstance(exc, httpx.TimeoutException):
+        return f"Request to {target} timed out."
+    return str(exc) or repr(exc)
+
+
 async def fetch_pool_diagnostics(
     client: httpx.AsyncClient,
     manager_url: str,
@@ -118,7 +136,7 @@ async def fetch_list_proxies(
         response.raise_for_status()
         payload = response.json()
     except httpx.HTTPError as exc:
-        return [], 0, str(exc)
+        return [], 0, format_manager_error(exc, manager_url, path="/proxies")
 
     total = int(payload.get("total") or 0)
     items = payload.get("items", [])
@@ -168,7 +186,7 @@ async def fetch_proxies_page(
         response.raise_for_status()
         payload = response.json()
     except httpx.HTTPError as exc:
-        return [], 0, str(exc)
+        return [], 0, format_manager_error(exc, manager_url, path="/proxies")
 
     items = payload.get("items", [])
     total = int(payload.get("total") or 0)
@@ -233,9 +251,9 @@ async def fetch_pool_history(
                 "Restart free-proxy-manager to load the 30-day API limits "
                 f"(hours<={hours}, limit<={limit}). Server detail: {detail}"
             )
-        return [], str(exc)
+        return [], format_manager_error(exc, manager_url, path="/stats/history")
     except httpx.HTTPError as exc:
-        return [], str(exc)
+        return [], format_manager_error(exc, manager_url, path="/stats/history")
 
     points: list[PoolHistoryPoint] = []
     for item in payload.get("items", []):

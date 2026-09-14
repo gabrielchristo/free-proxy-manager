@@ -239,4 +239,4 @@ class ProxiesTab(QWidget):
     def _on_failed(self, error: str) -> None:
         self.load_button.setEnabled(True)
         self.status_label.setText("Load failed")
-        QMessageBox.critical(self, "Load failed", error)
+        QMessageBox.warning(self, "Load failed", error)

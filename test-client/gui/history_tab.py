@@ -105,8 +105,6 @@ class HistoryTab(QWidget):
         self.auto_refresh.toggled.connect(self._toggle_auto_refresh)
         self.refresh_seconds.valueChanged.connect(self._reset_timer_interval)
 
-        QTimer.singleShot(0, self.refresh_chart)
-
     def _toggle_auto_refresh(self, enabled: bool) -> None:
         if enabled:
             self._reset_timer_interval()
@@ -167,7 +165,7 @@ class HistoryTab(QWidget):
         self.status_label.setText("Load failed")
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
-        QMessageBox.critical(self, "History load failed", error)
+        QMessageBox.warning(self, "History load failed", error)
 
     def _draw_chart(self) -> None:
         self.figure.clear()

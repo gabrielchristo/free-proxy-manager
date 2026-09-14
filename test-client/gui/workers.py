@@ -27,6 +27,8 @@ class AsyncWorker(QThread):
         try:
             result = asyncio.run(self.coro_factory())
             self.finished_ok.emit(result)
+        except RuntimeError as exc:
+            self.failed.emit(str(exc))
         except Exception as exc:
             self.failed.emit(f"{exc}\n{traceback.format_exc()}")
 
