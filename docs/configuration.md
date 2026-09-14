@@ -53,14 +53,15 @@ Collection sources live in [`sources.json`](../sources.json). Details in [Source
 | `STATS_SNAPSHOT_RETENTION_DAYS` | Days to keep snapshot rows for charts |
 | `STATS_HISTORY_MAX_HOURS` | Max lookback for `GET /stats/history` (default 720 = 30 days) |
 | `STATS_HISTORY_MAX_LIMIT` | Max snapshots returned by history endpoint (default 8640) |
-| `RECHECK_BATCH_SIZE` | Maximum due HEALTHY proxies enqueued per refill cycle (priority tier) |
+| `RECHECK_BATCH_SIZE` | Legacy cap kept for compatibility; queue refill now uses equal per-status slots instead |
 | `SCORE_BATCH_SIZE` | Proxies processed per batch in the score job |
 
 ## Cooldown
 
 | Variable | Description |
 |----------|-------------|
-| `FAILURE_THRESHOLD` | Consecutive failures before cooldown |
+| `FAILURE_THRESHOLD` | Consecutive failures before a proxy is marked DEAD |
+| `DEAD_MARK_REMOVAL_THRESHOLD` | Consecutive DEAD marks without recovery before the proxy row is deleted (default 7) |
 | `COOLDOWN_INITIAL` | Initial cooldown (s) |
 | `COOLDOWN_MAX` | Maximum cooldown (s) |
 | `COOLDOWN_MAX_LEVEL` | Maximum backoff level |

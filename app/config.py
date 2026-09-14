@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     score_batch_size: int = Field(ge=1)
 
     failure_threshold: int = Field(ge=1)
+    dead_mark_removal_threshold: int = Field(default=7, ge=1)
     cooldown_initial: int = Field(ge=60)
     cooldown_max: int = Field(ge=300)
     cooldown_max_level: int = Field(ge=1)

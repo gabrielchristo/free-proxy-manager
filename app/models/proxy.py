@@ -93,6 +93,7 @@ class Proxy(Base):
     success_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    consecutive_dead_marks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

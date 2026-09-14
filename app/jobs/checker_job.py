@@ -17,6 +17,8 @@ from app.services.scorer import ScorerService
 
 logger = logging.getLogger(__name__)
 
+QUEUE_STATE_ORDER = ("healthy", "new", "degraded", "dead")
+
 
 @dataclass(frozen=True, slots=True)
 class ProxyCheckTarget:
@@ -186,63 +188,96 @@ class CheckerJob:
         limit: int,
         exclude_ids: frozenset[int],
     ) -> tuple[list[int], str]:
-        """Pick queue batch: due HEALTHY first, then NEW, DEGRADED, and DEAD."""
+        """Pick queue batch with equal-ish slots per status tier."""
         now = utc_now()
         recheck_due_cutoff = now - timedelta(seconds=self.settings.recheck_interval)
-        collected: list[int] = []
-        selected_rows: list[tuple[int, datetime | None]] = []
         seen = set(exclude_ids)
-        healthy_cap = min(limit, self.settings.recheck_batch_size)
-        healthy_taken = 0
+        slots = self._allocate_state_slots(limit, len(QUEUE_STATE_ORDER))
 
-        def take_healthy(*, was_dead: bool) -> None:
-            nonlocal collected, selected_rows, healthy_taken
-            remaining = min(limit - len(collected), healthy_cap - healthy_taken)
-            if remaining <= 0:
-                return
-
-            query = db.query(Proxy).filter(
-                Proxy.status == ProxyStatus.HEALTHY,
-                Proxy.was_dead.is_(was_dead),
-                (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
-                (Proxy.last_checked.is_(None)) | (Proxy.last_checked <= recheck_due_cutoff),
-            )
+        def filter_seen(query):
             if seen:
-                query = query.filter(~Proxy.id.in_(seen))
+                return query.filter(~Proxy.id.in_(seen))
+            return query
 
-            picked = self._pick_fair_proxy_rows(db, query, remaining)
-            for proxy_id, last_checked in picked:
-                collected.append(proxy_id)
-                selected_rows.append((proxy_id, last_checked))
-                seen.add(proxy_id)
-                healthy_taken += 1
+        def healthy_query():
+            return filter_seen(
+                db.query(Proxy).filter(
+                    Proxy.status == ProxyStatus.HEALTHY,
+                    (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+                    (Proxy.last_checked.is_(None)) | (Proxy.last_checked <= recheck_due_cutoff),
+                )
+            )
 
-        def take(statuses: list[ProxyStatus], *, cooldown_only: bool = False) -> None:
-            nonlocal collected, selected_rows
-            remaining = limit - len(collected)
-            if remaining <= 0:
-                return
-
+        def status_query(statuses: list[ProxyStatus], *, cooldown_only: bool = False):
             query = db.query(Proxy).filter(Proxy.status.in_(statuses))
             if cooldown_only:
                 query = query.filter(
                     (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now)
                 )
-            if seen:
-                query = query.filter(~Proxy.id.in_(seen))
+            return filter_seen(query)
 
-            picked = self._pick_fair_proxy_rows(db, query, remaining)
+        query_builders = [
+            healthy_query,
+            lambda: status_query([ProxyStatus.NEW]),
+            lambda: status_query([ProxyStatus.DEGRADED]),
+            lambda: status_query([ProxyStatus.DEAD], cooldown_only=True),
+        ]
+
+        pools: dict[str, list[int]] = {}
+        selected_rows: list[tuple[int, datetime | None]] = []
+        for key, slot, build_query in zip(QUEUE_STATE_ORDER, slots, query_builders):
+            picked = self._pick_fair_proxy_rows(db, build_query(), slot)
+            pool_ids = []
             for proxy_id, last_checked in picked:
-                collected.append(proxy_id)
+                pool_ids.append(proxy_id)
                 selected_rows.append((proxy_id, last_checked))
                 seen.add(proxy_id)
+            pools[key] = pool_ids
 
-        take_healthy(was_dead=False)
-        take_healthy(was_dead=True)
-        take([ProxyStatus.NEW])
-        take([ProxyStatus.DEGRADED])
-        take([ProxyStatus.DEAD], cooldown_only=True)
+        shortfall = limit - sum(len(pool) for pool in pools.values())
+        if shortfall > 0:
+            for key, build_query in zip(QUEUE_STATE_ORDER, query_builders):
+                if shortfall <= 0:
+                    break
+                extra = self._pick_fair_proxy_rows(db, build_query(), shortfall)
+                extra_ids = []
+                for proxy_id, last_checked in extra:
+                    extra_ids.append(proxy_id)
+                    selected_rows.append((proxy_id, last_checked))
+                    seen.add(proxy_id)
+                pools[key].extend(extra_ids)
+                shortfall -= len(extra_ids)
+
+        collected = self._round_robin_state_pools(pools, limit)
         return collected, self._format_last_checked_range(selected_rows)
+
+    @staticmethod
+    def _allocate_state_slots(limit: int, state_count: int) -> list[int]:
+        """Split a batch limit into nearly equal per-status quotas."""
+        if limit <= 0 or state_count <= 0:
+            return []
+        base, remainder = divmod(limit, state_count)
+        return [base + (1 if index < remainder else 0) for index in range(state_count)]
+
+    @staticmethod
+    def _round_robin_state_pools(pools: dict[str, list[int]], limit: int) -> list[int]:
+        """Interleave proxy ids across status tiers for queue ordering."""
+        pointers = dict.fromkeys(QUEUE_STATE_ORDER, 0)
+        collected: list[int] = []
+        while len(collected) < limit:
+            progress = False
+            for key in QUEUE_STATE_ORDER:
+                if len(collected) >= limit:
+                    break
+                pool = pools.get(key, [])
+                pointer = pointers[key]
+                if pointer < len(pool):
+                    collected.append(pool[pointer])
+                    pointers[key] = pointer + 1
+                    progress = True
+            if not progress:
+                break
+        return collected
 
     @staticmethod
     def _enabled_source_ids(db: Session) -> list[int]:
@@ -482,7 +517,17 @@ class CheckerJob:
                 return
 
             previous_status = target.previous_status
-            self._apply_result(proxy, result)
+            removed = self._apply_result(db, proxy, result)
+            if removed:
+                db.commit()
+                logger.info(
+                    "[%s] Proxy %s removed after %s consecutive DEAD marks",
+                    target.source_label,
+                    target.url,
+                    self.settings.dead_mark_removal_threshold,
+                )
+                return
+
             source_count = self._count_sources(db, proxy.id)
             self.scorer.apply_to_proxy(proxy, source_count=source_count)
             db.commit()
@@ -552,8 +597,15 @@ class CheckerJob:
         )
         return max(count, 1)
 
-    def _apply_result(self, proxy: Proxy, result: CheckResult) -> None:
-        """Update proxy counters, status, cooldown, and internal last_checked timestamp."""
+    def _remove_proxy(self, db: Session, proxy: Proxy) -> None:
+        """Delete source links and the proxy row."""
+        db.query(ProxySourceLink).filter(ProxySourceLink.proxy_id == proxy.id).delete(
+            synchronize_session=False
+        )
+        db.delete(proxy)
+
+    def _apply_result(self, db: Session, proxy: Proxy, result: CheckResult) -> bool:
+        """Update proxy counters, status, cooldown; return True if proxy was removed."""
         now = utc_now()
         proxy.last_checked = now
         proxy.last_http_status = result.http_status
@@ -566,17 +618,18 @@ class CheckerJob:
             proxy.consecutive_failures += 1
             proxy.last_failure = now
             proxy.last_error = result.error or "proxy authentication required"
-            return
+            return False
 
         if result.success:
             proxy.success_count += 1
             proxy.consecutive_failures = 0
+            proxy.consecutive_dead_marks = 0
             proxy.cooldown_until = None
             proxy.cooldown_level = 0
             proxy.last_success = now
             proxy.last_error = None
             proxy.status = ProxyStatus.HEALTHY
-            return
+            return False
 
         proxy.failure_count += 1
         proxy.consecutive_failures += 1
@@ -584,6 +637,11 @@ class CheckerJob:
         proxy.last_error = result.error
 
         if proxy.consecutive_failures >= self.settings.failure_threshold:
+            proxy.consecutive_dead_marks += 1
+            if proxy.consecutive_dead_marks >= self.settings.dead_mark_removal_threshold:
+                self._remove_proxy(db, proxy)
+                return True
+
             proxy.status = ProxyStatus.DEAD
             proxy.was_dead = True
             proxy.cooldown_level = min(proxy.cooldown_level + 1, self.settings.cooldown_max_level)
@@ -594,3 +652,5 @@ class CheckerJob:
             proxy.cooldown_until = now + timedelta(seconds=cooldown_seconds)
         else:
             proxy.status = ProxyStatus.DEGRADED
+
+        return False

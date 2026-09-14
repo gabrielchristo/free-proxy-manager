@@ -36,19 +36,23 @@ Consumer applications
 
 1. **Collector job** fetches proxies from sources defined in `sources.json`.
 2. HTTP/HTTPS entries are normalized and deduplicated by **`host + port`** (canonical IP / lowercase hostname). When the same endpoint appears as both HTTP and HTTPS, one row is kept (HTTPS preferred).
-3. New or eligible proxies enter the checker queue; due HEALTHY rechecks get **priority** on refill.
+3. New or eligible proxies enter the checker queue; each refill allocates **equal-ish slots** across `HEALTHY` (due), `NEW`, `DEGRADED`, and `DEAD` (outside cooldown), with round-robin across providers inside each tier.
 4. **Checker workers** test connectivity through the proxy against `http://detectportal.firefox.com/success.txt`. A background task probes the same URL **directly** every `CONNECTIVITY_CHECK_INTERVAL` seconds (default 30). When direct internet is down, checks are skipped or failures discarded so HEALTHY proxies are not demoted by a local outage.
-5. Results update status, metrics, cooldown, and score.
+5. Results update status, metrics, cooldown, and score. Proxies marked **DEAD seven times in a row** (without an intervening successful check) are deleted from the database.
 6. The API serves proxies with status `HEALTHY` or `DEGRADED`, outside cooldown.
 
-### Checker queue priority (each refill)
+### Checker queue fairness (each refill)
 
-1. `HEALTHY` with `last_checked` ≥ `RECHECK_INTERVAL` ago (`was_dead=false` before `was_dead=true`)
-2. `NEW`
-3. `DEGRADED`
-4. `DEAD` (outside cooldown)
+Batch size is split across four status tiers (`limit ÷ 4`, remainder distributed). Within each tier, selection uses `CHECKER_SELECTION_POOL_SIZE` with **round-robin across providers**. Unused slots from a tier are redistributed to tiers that still have candidates. Queue order interleaves tiers round-robin.
 
-Random selection within each tier via `CHECKER_SELECTION_POOL_SIZE`, with **round-robin across providers** (enabled sources in `proxy_sources`) to avoid batches dominated by a single source.
+| Tier | Eligibility |
+|------|-------------|
+| `HEALTHY` | `last_checked` ≥ `RECHECK_INTERVAL` ago, outside cooldown |
+| `NEW` | always |
+| `DEGRADED` | always |
+| `DEAD` | outside cooldown |
+
+`RECHECK_BATCH_SIZE` remains in config for compatibility but no longer caps HEALTHY selection separately.
 
 ## Proxy states
 
@@ -59,8 +63,8 @@ NEW → CHECKING → HEALTHY
 ```
 
 - `DISABLED`: proxy requires authentication (HTTP 407).
-- `DEAD`: consecutive failures above threshold; enters cooldown with backoff.
-- `HEALTHY`: last check succeeded.
+- `DEAD`: consecutive failures above threshold; enters cooldown with backoff. After `DEAD_MARK_REMOVAL_THRESHOLD` consecutive DEAD marks without recovery, the row is deleted.
+- `HEALTHY`: last check succeeded; resets consecutive DEAD mark counter.
 
 ## Database
 

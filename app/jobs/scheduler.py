@@ -74,7 +74,7 @@ class JobScheduler:
         await self.checker_job.refill_queue()
 
     async def _checker_refill_loop(self) -> None:
-        """Keep the checker queue filled; HEALTHY due for recheck get first priority."""
+        """Keep the checker queue filled with state-fair batches."""
         while True:
             await self.checker_job.refill_queue()
             await asyncio.sleep(self.settings.checker_refill_interval)
