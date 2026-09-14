@@ -102,3 +102,15 @@ class HealthResponse(BaseModel):
     status: str
     database: str
     proxy_pool: ProxyPoolStats
+
+
+class PoolSnapshotItem(BaseModel):
+    recorded_at: datetime
+    total_proxies: int
+    pool: ProxyPoolStats
+
+
+class PoolSnapshotHistoryResponse(BaseModel):
+    hours: int
+    count: int
+    items: list[PoolSnapshotItem] = Field(default_factory=list)

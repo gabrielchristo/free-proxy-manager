@@ -1,13 +1,15 @@
 import logging
 import random
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
-from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
+from app.models import PoolSnapshot, Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.schemas.proxy import (
+    PoolSnapshotHistoryResponse,
+    PoolSnapshotItem,
     ProxyListItem,
     ProxyPoolStats,
     ProxyResponse,
@@ -119,10 +121,9 @@ class PoolService:
         )
         return total, [self._to_list_item(proxy) for proxy in rows]
 
-    def get_stats(self, db: Session) -> StatsResponse:
-        """Aggregate pool, protocol, latency, and per-source statistics."""
+    def get_pool_stats(self, db: Session) -> ProxyPoolStats:
+        """Count proxies by status and cooldown (same fields as /health proxy_pool)."""
         now = datetime.now(UTC)
-        total = db.query(func.count(Proxy.id)).scalar() or 0
 
         def count_status(status: ProxyStatus) -> int:
             return db.query(func.count(Proxy.id)).filter(Proxy.status == status).scalar() or 0
@@ -134,7 +135,7 @@ class PoolService:
             or 0
         )
 
-        pool = ProxyPoolStats(
+        return ProxyPoolStats(
             healthy=count_status(ProxyStatus.HEALTHY),
             degraded=count_status(ProxyStatus.DEGRADED),
             dead=count_status(ProxyStatus.DEAD),
@@ -143,6 +144,11 @@ class PoolService:
             disabled=count_status(ProxyStatus.DISABLED),
             in_cooldown=in_cooldown,
         )
+
+    def get_stats(self, db: Session) -> StatsResponse:
+        """Aggregate pool, protocol, latency, and per-source statistics."""
+        total = db.query(func.count(Proxy.id)).scalar() or 0
+        pool = self.get_pool_stats(db)
 
         http_count = db.query(func.count(Proxy.id)).filter(Proxy.protocol == "http").scalar() or 0
         https_count = (
@@ -213,6 +219,40 @@ class PoolService:
             proxies_by_country=proxies_by_country,
             sources=sources,
         )
+
+    def get_snapshot_history(
+        self,
+        db: Session,
+        *,
+        hours: int,
+        limit: int,
+    ) -> PoolSnapshotHistoryResponse:
+        """Return recorded pool snapshots for charting trends."""
+        since = datetime.now(UTC) - timedelta(hours=hours)
+        rows = (
+            db.query(PoolSnapshot)
+            .filter(PoolSnapshot.recorded_at >= since)
+            .order_by(PoolSnapshot.recorded_at.asc())
+            .limit(limit)
+            .all()
+        )
+        items = [
+            PoolSnapshotItem(
+                recorded_at=row.recorded_at,
+                total_proxies=row.total_proxies,
+                pool=ProxyPoolStats(
+                    healthy=row.healthy,
+                    degraded=row.degraded,
+                    dead=row.dead,
+                    new=row.new,
+                    checking=row.checking,
+                    disabled=row.disabled,
+                    in_cooldown=row.in_cooldown,
+                ),
+            )
+            for row in rows
+        ]
+        return PoolSnapshotHistoryResponse(hours=hours, count=len(items), items=items)
 
     @staticmethod
     def to_response(proxy: Proxy) -> ProxyResponse:

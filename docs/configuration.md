@@ -47,6 +47,8 @@ Collection sources live in [`sources.json`](../sources.json). Details in [Source
 | `RECHECK_INTERVAL` | Minimum time since `last_checked` before a HEALTHY proxy re-enters the queue |
 | `CLEANUP_INTERVAL` | Cleanup interval |
 | `SCORE_INTERVAL` | Score recalculation interval |
+| `STATS_SNAPSHOT_INTERVAL` | Pool snapshot interval in seconds (`0` disables) |
+| `STATS_SNAPSHOT_RETENTION_DAYS` | Days to keep snapshot rows for charts |
 | `RECHECK_BATCH_SIZE` | Maximum due HEALTHY proxies enqueued per refill cycle (priority tier) |
 | `SCORE_BATCH_SIZE` | Proxies processed per batch in the score job |
 

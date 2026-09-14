@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.schemas.proxy import ProxyListResponse, ProxyResponse, StatsResponse
+from app.schemas.proxy import (
+    PoolSnapshotHistoryResponse,
+    ProxyListResponse,
+    ProxyResponse,
+    StatsResponse,
+)
 from app.services.pool import PoolService
 
 router = APIRouter(tags=["proxies"])
@@ -70,3 +75,12 @@ def list_proxies(
 @router.get("/stats", response_model=StatsResponse)
 def get_stats(db: Session = Depends(get_db)) -> StatsResponse:
     return pool_service.get_stats(db)
+
+
+@router.get("/stats/history", response_model=PoolSnapshotHistoryResponse)
+def get_stats_history(
+    hours: int = Query(default=24, ge=1, le=168),
+    limit: int = Query(default=500, ge=1, le=5000),
+    db: Session = Depends(get_db),
+) -> PoolSnapshotHistoryResponse:
+    return pool_service.get_snapshot_history(db, hours=hours, limit=limit)

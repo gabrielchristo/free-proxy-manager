@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     recheck_interval: int = Field(ge=60)
     cleanup_interval: int = Field(ge=300)
     score_interval: int = Field(ge=60)
+    stats_snapshot_interval: int = Field(default=300, ge=0)
+    stats_snapshot_retention_days: int = Field(default=30, ge=1)
     recheck_batch_size: int = Field(ge=1)
     score_batch_size: int = Field(ge=1)
 

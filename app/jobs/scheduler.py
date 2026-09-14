@@ -9,6 +9,7 @@ from app.jobs.checker_job import CheckerJob
 from app.jobs.cleanup_job import CleanupJob
 from app.jobs.collector_job import CollectorJob
 from app.jobs.score_job import ScoreJob
+from app.jobs.snapshot_job import SnapshotJob
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class JobScheduler:
         self.collector_job = CollectorJob()
         self.cleanup_job = CleanupJob(self.settings)
         self.score_job = ScoreJob()
+        self.snapshot_job = SnapshotJob(self.settings)
         self.checkpoint_job = CheckpointJob(self.settings)
         self._tasks: list[asyncio.Task] = []
 
@@ -40,6 +42,10 @@ class JobScheduler:
         if self.settings.db_checkpoint_interval > 0:
             self._tasks.append(
                 asyncio.create_task(self._checkpoint_loop(), name="checkpoint-loop")
+            )
+        if self.settings.stats_snapshot_interval > 0:
+            self._tasks.append(
+                asyncio.create_task(self._snapshot_loop(), name="snapshot-loop")
             )
         await self._run_initial_cycle()
         logger.info("Background jobs started")
@@ -100,6 +106,12 @@ class JobScheduler:
             await asyncio.sleep(self.settings.db_checkpoint_interval)
             await asyncio.to_thread(self.checkpoint_job.run)
 
+    async def _snapshot_loop(self) -> None:
+        """Persist pool status counts for historical charts."""
+        while True:
+            await asyncio.to_thread(self._run_snapshot_job)
+            await asyncio.sleep(self.settings.stats_snapshot_interval)
+
     def _run_cleanup_job(self) -> int:
         """Execute cleanup inside a short-lived DB session."""
         db = SessionLocal()
@@ -113,5 +125,13 @@ class JobScheduler:
         db = SessionLocal()
         try:
             return self.score_job.run(db)
+        finally:
+            db.close()
+
+    def _run_snapshot_job(self) -> None:
+        """Record a pool snapshot inside a short-lived DB session."""
+        db = SessionLocal()
+        try:
+            self.snapshot_job.run(db)
         finally:
             db.close()

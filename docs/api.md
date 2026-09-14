@@ -88,6 +88,53 @@ Aggregated pool, protocol, latency, country, and source statistics.
 
 ---
 
+## GET /stats/history
+
+Time series of pool status counts recorded by the background snapshot job.
+
+Use this endpoint to chart `healthy`, `dead`, `in_cooldown`, etc. over time.
+
+### Query params
+
+| Param | Default | Description |
+|-------|---------|-------------|
+| `hours` | 24 | Look back window (1–168) |
+| `limit` | 500 | Maximum snapshots returned (1–5000) |
+
+### Example
+
+```http
+GET /stats/history?hours=48&limit=200
+```
+
+### 200 response
+
+```json
+{
+  "hours": 48,
+  "count": 2,
+  "items": [
+    {
+      "recorded_at": "2026-09-13T12:00:00Z",
+      "total_proxies": 18310,
+      "pool": {
+        "healthy": 71,
+        "degraded": 0,
+        "dead": 17777,
+        "new": 0,
+        "checking": 5,
+        "disabled": 457,
+        "in_cooldown": 3816
+      }
+    }
+  ]
+}
+```
+
+Configure snapshot frequency with `STATS_SNAPSHOT_INTERVAL` (seconds, `0` disables). Old rows are pruned after `STATS_SNAPSHOT_RETENTION_DAYS`.
+
+---
+
 ## GET /health
 
 Healthcheck for Docker and monitoring.
