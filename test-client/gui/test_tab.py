@@ -10,14 +10,13 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
     QFileDialog,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
@@ -40,7 +39,9 @@ class TestTab(QWidget):
         root = QVBoxLayout(self)
 
         params_box = QGroupBox("Test parameters")
-        form = QFormLayout(params_box)
+        grid = QGridLayout(params_box)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
 
         self.target_url = QLineEdit(DEFAULT_TARGET_URL)
         self.timeout = QDoubleSpinBox()
@@ -74,24 +75,30 @@ class TestTab(QWidget):
         self.wait_poll_seconds.setRange(1.0, 60.0)
         self.wait_poll_seconds.setValue(5.0)
 
-        form.addRow("Target URL", self.target_url)
-        form.addRow("Timeout (s)", self.timeout)
-        form.addRow("GET /proxy calls", self.proxy_calls)
-        form.addRow("List pick count", self.list_count)
-        form.addRow("List protocol", self.list_protocol)
-        form.addRow("List status", self.list_status)
-        form.addRow("List fetch limit", self.list_fetch_limit)
-        form.addRow("", self.list_anonymous)
-        form.addRow("Min score (/proxy)", self.min_score)
-        form.addRow("Concurrency", self.concurrency)
-        form.addRow("Wait seconds", self.wait_seconds)
-        form.addRow("Wait poll (s)", self.wait_poll_seconds)
+        grid.addWidget(QLabel("Target URL"), 0, 0)
+        grid.addWidget(self.target_url, 0, 1, 1, 3)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(params_box)
-        scroll.setMaximumHeight(280)
-        root.addWidget(scroll)
+        fields = [
+            ("Timeout (s)", self.timeout),
+            ("GET /proxy calls", self.proxy_calls),
+            ("List pick count", self.list_count),
+            ("List protocol", self.list_protocol),
+            ("List status", self.list_status),
+            ("List fetch limit", self.list_fetch_limit),
+            ("Min score (/proxy)", self.min_score),
+            ("Concurrency", self.concurrency),
+            ("Wait seconds", self.wait_seconds),
+            ("Wait poll (s)", self.wait_poll_seconds),
+        ]
+        for index, (label, widget) in enumerate(fields):
+            row, col = divmod(index, 2)
+            base_col = col * 2
+            grid.addWidget(QLabel(label), row + 1, base_col)
+            grid.addWidget(widget, row + 1, base_col + 1)
+
+        grid.addWidget(self.list_anonymous, 6, 0, 1, 4)
+
+        root.addWidget(params_box)
 
         actions = QHBoxLayout()
         self.run_button = QPushButton("Run tests")

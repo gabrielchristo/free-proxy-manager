@@ -75,7 +75,7 @@ class HistoryTab(QWidget):
         series_box = QGroupBox("Series")
         series_layout = QGridLayout(series_box)
         self.series_checks: dict[str, QCheckBox] = {}
-        defaults = {"healthy", "dead", "in_cooldown", "total_proxies"}
+        defaults = {"healthy", "degraded", "dead", "in_cooldown", "total_proxies"}
         for index, (key, (label, _color)) in enumerate(SERIES.items()):
             checkbox = QCheckBox(label)
             checkbox.setChecked(key in defaults)
