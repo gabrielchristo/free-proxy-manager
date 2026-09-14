@@ -86,6 +86,14 @@ All params from `/proxy`, plus:
 
 Aggregated pool, protocol, latency, country, and source statistics.
 
+Each source includes:
+
+| Field | Description |
+|-------|-------------|
+| `proxies_found` | Proxies returned in the **last** collection run |
+| `total_proxies_found` | **Cumulative** unique proxies ever linked to that source |
+| `valid_proxies` | Proxies from that source currently in `HEALTHY` status |
+
 ---
 
 ## GET /stats/history

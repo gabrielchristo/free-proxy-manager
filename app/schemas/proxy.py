@@ -80,6 +80,7 @@ class SourceStats(BaseModel):
     name: str
     enabled: bool
     proxies_found: int
+    total_proxies_found: int
     valid_proxies: int
     success_rate: float | None = None
     last_run: datetime | None = None

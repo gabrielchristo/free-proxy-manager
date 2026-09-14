@@ -201,6 +201,7 @@ class PoolService:
                     name=source.name,
                     enabled=source.enabled,
                     proxies_found=source.proxies_found,
+                    total_proxies_found=source.total_proxies_found,
                     valid_proxies=valid_proxies,
                     success_rate=round(rate, 2) if rate is not None else None,
                     last_run=source.last_run,
