@@ -1,13 +1,16 @@
 # Test Client
 
-Python client to validate **free-proxy-manager** proxies by fetching an external URL (default: Google).
+PyQt5 desktop client for **free-proxy-manager**: integration tests, proxy browser, and pool history charts.
 
-## What it does
+Default probe target: `http://detectportal.firefox.com/success.txt` (same lightweight check as the server).
 
-1. **10×** `GET /proxy` — each returned proxy is tested against the target URL.
-2. **1×** `GET /proxies` — fetches up to 100 candidates with `protocol=https`, `status=HEALTHY`, `anonymous=true`, ranks by anonymity (`elite` / `high_anonymous` > `anonymous`) and score, picks **10**, and tests each one.
+## Features
 
-Total: **20 probes** with per-request reporting (OK/FAIL, timing, HTTP status, metadata).
+| Tab | Description |
+|-----|-------------|
+| **Integration tests** | `GET /proxy` + ranked `GET /proxies`, probe each proxy against a target URL |
+| **Proxy database** | Paginated table of all proxies from `GET /proxies` with full metadata |
+| **Pool history** | Matplotlib chart from `GET /stats/history` (healthy, dead, cooldown, etc.) |
 
 ## Setup
 
@@ -18,44 +21,51 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Make sure **free-proxy-manager** is running (e.g. `http://localhost:9321`).
+Make sure **free-proxy-manager** is running (default: `http://localhost:9321`).
 
-## Usage
+For the **Pool history** tab, enable snapshots on the server:
+
+```env
+STATS_SNAPSHOT_INTERVAL=300
+```
+
+## Run
 
 ```bash
 python main.py
 ```
 
-Useful options:
+Set the **Manager URL** at the top (shared across tabs).
 
-```bash
-python main.py --manager-url http://localhost:9321 --target-url https://www.google.com/
-python main.py --json report.json
-python main.py --concurrency 3 --timeout 20
-```
+### Integration tests tab
 
-Environment variables:
+Configurable parameters:
 
-| Variable | Default |
-|----------|---------|
-| `PROXY_MANAGER_URL` | `http://localhost:9321` |
-| `TEST_TARGET_URL` | `https://www.google.com/` |
-| `TEST_TIMEOUT` | `15` |
+- Target URL, timeout, concurrency
+- Number of `GET /proxy` calls
+- `GET /proxies` filters (protocol, status, anonymous, fetch limit, pick count)
+- Optional wait for HEALTHY pool before testing
+- Save JSON report
 
-## Output
+### Proxy database tab
 
-Terminal report with **pool diagnostics** before tests (`/health`, counts by status, how many match the list filter).
+- Filter by protocol, status, country, latency, score, anonymity
+- Page through results (100 per page max) or **Load all pages**
+- Table columns include score, latency, ISP, source fields, and JSON metadata
 
-If there are no `HEALTHY` proxies, the 10 `/proxies` slots become **one SKIP line** (not 10 duplicates).
+### Pool history tab
 
-### Empty pool / checker still warming up
+Defaults (30-day window, aligned with `STATS_SNAPSHOT_INTERVAL=300`):
 
-`/proxy` only returns `HEALTHY` proxies. If the checker has not validated any yet:
+- **Hours:** 720 (30 days)
+- **Max points:** 8640 (one snapshot every 5 minutes for 30 days)
+- **Auto refresh:** disabled by default (interval 60 s when enabled)
 
-```bash
-python main.py --wait-seconds 300
-```
+Toggle series (healthy, dead, in cooldown, total, …) on the chart.
 
-Waits until at least one `HEALTHY` proxy appears (poll every 5s).
+## Dependencies
 
-Exit codes: `0` = all executed tests passed; `1` = at least one failed; `2` = no tests executed.
+- **httpx** — API calls and proxy probes
+- **PyQt5** — desktop GUI
+- **matplotlib** — pool history chart (Qt5 backend)
+
