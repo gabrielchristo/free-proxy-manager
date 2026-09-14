@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 
 from client_lib.models import DEFAULT_MANAGER_URL
 from gui.history_tab import HistoryTab
+from gui.overview_tab import OverviewTab
 from gui.proxies_tab import ProxiesTab
 from gui.test_tab import TestTab
 
@@ -40,9 +41,11 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.test_tab = TestTab(self.get_manager_url)
+        self.overview_tab = OverviewTab(self.get_manager_url)
         self.proxies_tab = ProxiesTab(self.get_manager_url)
         self.history_tab = HistoryTab(self.get_manager_url)
         self.tabs.addTab(self.test_tab, "Integration tests")
+        self.tabs.addTab(self.overview_tab, "Overview")
         self.tabs.addTab(self.proxies_tab, "Proxy database")
         self.tabs.addTab(self.history_tab, "Pool history")
         layout.addWidget(self.tabs)

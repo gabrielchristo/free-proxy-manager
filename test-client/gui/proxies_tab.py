@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
-    QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -37,7 +37,9 @@ class ProxiesTab(QWidget):
         root = QVBoxLayout(self)
 
         filters_box = QGroupBox("Filters")
-        form = QFormLayout(filters_box)
+        grid = QGridLayout(filters_box)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
 
         self.protocol = QComboBox()
         self.protocol.addItems(["", "http", "https"])
@@ -62,15 +64,26 @@ class ProxiesTab(QWidget):
         self.page_size.setValue(100)
         self.load_all = QCheckBox("Load all pages (may take a while)")
 
-        form.addRow("Protocol", self.protocol)
-        form.addRow("Status", self.status)
-        form.addRow("Country", self.country)
-        form.addRow("Country code", self.country_code)
-        form.addRow("Max latency (ms)", self.max_latency)
-        form.addRow("", self.anonymous)
-        form.addRow("Min score", self.min_score)
-        form.addRow("Page size", self.page_size)
-        form.addRow("", self.load_all)
+        fields = [
+            ("Protocol", self.protocol),
+            ("Status", self.status),
+            ("Country", self.country),
+            ("Country code", self.country_code),
+            ("Max latency (ms)", self.max_latency),
+            ("Min score", self.min_score),
+            ("Page size", self.page_size),
+            ("", self.anonymous),
+        ]
+        for index, (label, widget) in enumerate(fields):
+            row, col = divmod(index, 2)
+            base_col = col * 2
+            if label:
+                grid.addWidget(QLabel(label), row, base_col)
+                grid.addWidget(widget, row, base_col + 1)
+            else:
+                grid.addWidget(widget, row, base_col, 1, 2)
+
+        grid.addWidget(self.load_all, 4, 0, 1, 4)
 
         root.addWidget(filters_box)
 
@@ -95,8 +108,9 @@ class ProxiesTab(QWidget):
         self.table.setHorizontalHeaderLabels(PROXY_TABLE_COLUMNS)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(True)
+        self.table.setMinimumHeight(520)
         self.table.horizontalHeader().setStretchLastSection(True)
-        root.addWidget(self.table)
+        root.addWidget(self.table, stretch=1)
 
     def _filters(self) -> dict:
         filters = {}

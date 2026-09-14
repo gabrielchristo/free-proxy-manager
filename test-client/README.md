@@ -9,6 +9,7 @@ Default probe target: `http://detectportal.firefox.com/success.txt` (same lightw
 | Tab | Description |
 |-----|-------------|
 | **Integration tests** | `GET /proxy` + ranked `GET /proxies`, probe each proxy against a target URL |
+| **Overview** | Live view of `GET /health` and `GET /stats` (pool, countries, sources) |
 | **Proxy database** | Paginated table of all proxies from `GET /proxies` with full metadata |
 | **Pool history** | Matplotlib chart from `GET /stats/history` (healthy, dead, cooldown, etc.) |
 
@@ -36,6 +37,10 @@ python main.py
 ```
 
 Set the **Manager URL** at the top (shared across tabs).
+
+### Overview tab
+
+- **Refresh** loads `GET /health` (status, database, pool counts) and `GET /stats` (totals, latency, countries, sources)
 
 ### Integration tests tab
 

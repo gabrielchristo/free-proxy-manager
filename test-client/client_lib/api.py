@@ -93,6 +93,30 @@ async def fetch_pool_diagnostics(
     return diagnostics
 
 
+async def fetch_health(
+    client: httpx.AsyncClient,
+    manager_url: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        response = await client.get(f"{manager_url}/health")
+        response.raise_for_status()
+        return response.json(), None
+    except httpx.HTTPError as exc:
+        return None, format_manager_error(exc, manager_url, path="/health")
+
+
+async def fetch_stats(
+    client: httpx.AsyncClient,
+    manager_url: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        response = await client.get(f"{manager_url}/stats")
+        response.raise_for_status()
+        return response.json(), None
+    except httpx.HTTPError as exc:
+        return None, format_manager_error(exc, manager_url, path="/stats")
+
+
 async def fetch_proxy_from_endpoint(
     client: httpx.AsyncClient,
     manager_url: str,
