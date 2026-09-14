@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     score_interval: int = Field(ge=60)
     stats_snapshot_interval: int = Field(default=300, ge=0)
     stats_snapshot_retention_days: int = Field(default=30, ge=1)
+    stats_history_max_hours: int = Field(default=720, ge=1)
+    stats_history_max_limit: int = Field(default=8640, ge=1)
     recheck_batch_size: int = Field(ge=1)
     score_batch_size: int = Field(ge=1)
 

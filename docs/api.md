@@ -98,8 +98,8 @@ Use this endpoint to chart `healthy`, `dead`, `in_cooldown`, etc. over time.
 
 | Param | Default | Description |
 |-------|---------|-------------|
-| `hours` | 24 | Look back window (1–168) |
-| `limit` | 500 | Maximum snapshots returned (1–5000) |
+| `hours` | 720 | Look back window in hours (1–720, 30 days) |
+| `limit` | 8640 | Maximum snapshots returned (1–8640, ~30 days at 5 min intervals) |
 
 ### Example
 

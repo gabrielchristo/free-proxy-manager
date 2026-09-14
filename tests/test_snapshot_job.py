@@ -82,3 +82,11 @@ def test_get_snapshot_history(db_session):
     assert history.count == 1
     assert history.items[0].pool.healthy == 5
     assert history.items[0].pool.dead == 90
+
+
+def test_stats_history_accepts_month_window(client):
+    response = client.get("/stats/history", params={"hours": 720, "limit": 8640})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["hours"] == 720
+    assert payload["count"] == 0

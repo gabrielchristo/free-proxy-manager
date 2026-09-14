@@ -79,8 +79,18 @@ def get_stats(db: Session = Depends(get_db)) -> StatsResponse:
 
 @router.get("/stats/history", response_model=PoolSnapshotHistoryResponse)
 def get_stats_history(
-    hours: int = Query(default=24, ge=1, le=168),
-    limit: int = Query(default=500, ge=1, le=5000),
+    hours: int = Query(default=720, ge=1),
+    limit: int = Query(default=8640, ge=1),
     db: Session = Depends(get_db),
 ) -> PoolSnapshotHistoryResponse:
+    if hours > settings.stats_history_max_hours:
+        raise HTTPException(
+            status_code=422,
+            detail=f"hours must be <= {settings.stats_history_max_hours}",
+        )
+    if limit > settings.stats_history_max_limit:
+        raise HTTPException(
+            status_code=422,
+            detail=f"limit must be <= {settings.stats_history_max_limit}",
+        )
     return pool_service.get_snapshot_history(db, hours=hours, limit=limit)

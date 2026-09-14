@@ -49,6 +49,8 @@ Collection sources live in [`sources.json`](../sources.json). Details in [Source
 | `SCORE_INTERVAL` | Score recalculation interval |
 | `STATS_SNAPSHOT_INTERVAL` | Pool snapshot interval in seconds (`0` disables) |
 | `STATS_SNAPSHOT_RETENTION_DAYS` | Days to keep snapshot rows for charts |
+| `STATS_HISTORY_MAX_HOURS` | Max lookback for `GET /stats/history` (default 720 = 30 days) |
+| `STATS_HISTORY_MAX_LIMIT` | Max snapshots returned by history endpoint (default 8640) |
 | `RECHECK_BATCH_SIZE` | Maximum due HEALTHY proxies enqueued per refill cycle (priority tier) |
 | `SCORE_BATCH_SIZE` | Proxies processed per batch in the score job |
 
