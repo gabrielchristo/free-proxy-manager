@@ -36,6 +36,8 @@ Collection sources live in [`sources.json`](../sources.json). Details in [Source
 | `CHECK_SUCCESS_STATUS_MIN` | Minimum HTTP status for success |
 | `CHECK_SUCCESS_STATUS_MAX` | Maximum HTTP status for success |
 | `CHECK_FOLLOW_REDIRECTS` | Follow redirects (`true`/`false`) |
+| `CONNECTIVITY_CHECK_ENABLED` | Periodic direct-internet probe; pauses checks when offline |
+| `CONNECTIVITY_CHECK_INTERVAL` | Seconds between direct connectivity probes (default 30) |
 
 ## Jobs (seconds)
 

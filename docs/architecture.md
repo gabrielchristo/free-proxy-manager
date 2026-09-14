@@ -37,7 +37,7 @@ Consumer applications
 1. **Collector job** fetches proxies from sources defined in `sources.json`.
 2. HTTP/HTTPS entries are normalized and deduplicated by `protocol + host + port`.
 3. New or eligible proxies enter the checker queue; due HEALTHY rechecks get **priority** on refill.
-4. **Checker workers** test connectivity through the proxy against `http://detectportal.firefox.com/success.txt`.
+4. **Checker workers** test connectivity through the proxy against `http://detectportal.firefox.com/success.txt`. A background task probes the same URL **directly** every `CONNECTIVITY_CHECK_INTERVAL` seconds (default 30). When direct internet is down, checks are skipped or failures discarded so HEALTHY proxies are not demoted by a local outage.
 5. Results update status, metrics, cooldown, and score.
 6. The API serves proxies with status `HEALTHY` or `DEGRADED`, outside cooldown.
 

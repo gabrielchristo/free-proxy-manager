@@ -12,6 +12,7 @@ from app.datetime_utils import format_log_datetime, utc_now
 from app.database import SessionLocal
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.services.checker import CheckerService, CheckResult
+from app.services.connectivity import ConnectivityGuard
 from app.services.scorer import ScorerService
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class CheckerJob:
         self.queue = queue
         self.settings = settings or get_settings()
         self.checker = CheckerService(self.settings)
+        self.connectivity = ConnectivityGuard(self.settings)
         self.scorer = ScorerService(self.settings)
         self._workers: list[asyncio.Task] = []
         self._running = False
@@ -51,6 +53,7 @@ class CheckerJob:
         if self._running:
             return
         self._running = True
+        await self.connectivity.start()
         await self.checker.start()
         worker_count = self.settings.checker_concurrency
         self._workers = [
@@ -72,6 +75,7 @@ class CheckerJob:
             await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
         await self.checker.close()
+        await self.connectivity.close()
         logger.info("Checker workers stopped")
 
     def _drain_queue(self) -> int:
@@ -403,6 +407,10 @@ class CheckerJob:
 
     async def _check_proxy(self, proxy_id: int) -> None:
         """Mark proxy as CHECKING, run HTTP probe, persist outcome and score."""
+        if not await self.connectivity.is_available():
+            logger.debug("Skipping proxy_id=%s check — no direct internet connectivity", proxy_id)
+            return
+
         target = await asyncio.to_thread(self._mark_checking, proxy_id)
         if target is None:
             return
@@ -418,7 +426,28 @@ class CheckerJob:
             protocol=target.protocol,
         )
 
+        if not result.success and not await self.connectivity.is_available():
+            await asyncio.to_thread(self._revert_check, target)
+            logger.warning(
+                "[%s] Proxy %s check discarded — connectivity lost during probe",
+                target.source_label,
+                target.url,
+            )
+            return
+
         await asyncio.to_thread(self._persist_result, target, result)
+
+    def _revert_check(self, target: ProxyCheckTarget) -> None:
+        """Restore previous status when a failed probe is inconclusive (no internet)."""
+        db = SessionLocal()
+        try:
+            proxy = db.query(Proxy).filter(Proxy.id == target.proxy_id).one_or_none()
+            if proxy is None:
+                return
+            proxy.status = ProxyStatus(target.previous_status)
+            db.commit()
+        finally:
+            db.close()
 
     def _mark_checking(self, proxy_id: int) -> ProxyCheckTarget | None:
         """Transition proxy to CHECKING and return data needed for the HTTP probe."""

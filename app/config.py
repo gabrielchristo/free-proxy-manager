@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     check_success_status_min: int = Field(ge=100, le=599)
     check_success_status_max: int = Field(ge=100, le=599)
     check_follow_redirects: bool
+    connectivity_check_enabled: bool = True
+    connectivity_check_interval: int = Field(default=30, ge=5)
 
     collect_interval: int = Field(ge=60)
     collector_run_on_startup: bool = True
