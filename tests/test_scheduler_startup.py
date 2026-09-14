@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -12,6 +12,7 @@ async def test_initial_cycle_skips_collector_when_disabled():
     scheduler = JobScheduler()
     scheduler.settings = settings
     scheduler.collector_job = AsyncMock()
+    scheduler.collector_job.collector.sync_sources_from_config = Mock()
     scheduler.checker_job = AsyncMock()
     scheduler.checker_job.refill_queue = AsyncMock(return_value=0)
 
@@ -27,6 +28,7 @@ async def test_initial_cycle_runs_collector_by_default():
     scheduler = JobScheduler()
     scheduler.settings = settings
     scheduler.collector_job = AsyncMock()
+    scheduler.collector_job.collector.sync_sources_from_config = Mock()
     scheduler.checker_job = AsyncMock()
     scheduler.checker_job.refill_queue = AsyncMock(return_value=0)
 

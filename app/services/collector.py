@@ -11,7 +11,8 @@ from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
 from app.services.collector_helpers import apply_collected_fields, build_source_metadata
 from app.services.proxy_identity import prefer_protocol, proxy_identity
 from app.sources.base import CollectedProxy, ProxySourceBase
-from app.sources.loader import load_sources
+from app.sources.config import load_sources_config
+from app.sources.loader import load_sources, resolve_sources_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,8 @@ class CollectorService:
 
     async def collect_all(self) -> list[int]:
         """Collect from all enabled sources and return proxy IDs queued for checking."""
+        await asyncio.to_thread(self.sync_sources_from_config)
+
         queued_ids: list[int] = []
 
         for source in self.sources:
@@ -59,6 +62,31 @@ class CollectorService:
                 logger.exception("[%s] Collection failed", source.name)
 
         return queued_ids
+
+    def sync_sources_from_config(self) -> None:
+        """Upsert every source from sources.json, including disabled entries."""
+        config = load_sources_config(resolve_sources_config_path(self.settings))
+        db = SessionLocal()
+        try:
+            for item in config.sources:
+                db_source = (
+                    db.query(ProxySource).filter(ProxySource.name == item.name).one_or_none()
+                )
+                if db_source is None:
+                    db_source = ProxySource(
+                        name=item.name,
+                        url=item.url,
+                        enabled=item.enabled,
+                        priority=item.priority,
+                    )
+                    db.add(db_source)
+                else:
+                    db_source.url = item.url
+                    db_source.priority = item.priority
+                    db_source.enabled = item.enabled
+            db.commit()
+        finally:
+            db.close()
 
     def persist_collected_for_source(
         self,

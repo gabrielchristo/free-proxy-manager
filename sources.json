@@ -72,7 +72,7 @@
     {
       "name": "nodemaven",
       "type": "nodemaven",
-      "enabled": true,
+      "enabled": false,
       "url": "https://freeproxies.nodemaven.com/proxies",
       "priority": 65,
       "protocols": ["http", "https"],

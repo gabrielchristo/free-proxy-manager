@@ -2,7 +2,21 @@ from datetime import UTC, datetime, timedelta
 
 from app.config import get_settings
 from app.jobs.checker_job import QUEUE_STATE_ORDER, CheckerJob
-from app.models import Proxy, ProxyStatus
+from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
+
+
+def _link_proxies_to_enabled_source(db_session, proxies: list[Proxy]) -> None:
+    source = ProxySource(
+        name="fairness-test-source",
+        url="https://example.com/list",
+        enabled=True,
+        priority=100,
+    )
+    db_session.add(source)
+    db_session.flush()
+    for proxy in proxies:
+        db_session.add(ProxySourceLink(proxy_id=proxy.id, source_id=source.id))
+    db_session.commit()
 
 
 def test_allocate_state_slots_splits_evenly():
@@ -62,8 +76,12 @@ def test_fetch_queue_batch_balances_status_tiers(db_session):
                 status=ProxyStatus.DEAD,
                 cooldown_until=now - timedelta(minutes=1),
             )
-        )
-    db_session.commit()
+            )
+    db_session.flush()
+    _link_proxies_to_enabled_source(
+        db_session,
+        db_session.query(Proxy).all(),
+    )
 
     job = CheckerJob(queue=None, settings=get_settings())  # type: ignore[arg-type]
     proxy_ids, _ = job._fetch_queue_batch_ids(db_session, limit=40, exclude_ids=frozenset())
@@ -104,8 +122,12 @@ def test_fetch_queue_batch_redistributes_unused_slots(db_session):
                 protocol="http",
                 status=ProxyStatus.NEW,
             )
-        )
-    db_session.commit()
+            )
+    db_session.flush()
+    _link_proxies_to_enabled_source(
+        db_session,
+        db_session.query(Proxy).all(),
+    )
 
     job = CheckerJob(queue=None, settings=get_settings())  # type: ignore[arg-type]
     proxy_ids, _ = job._fetch_queue_batch_ids(db_session, limit=8, exclude_ids=frozenset())

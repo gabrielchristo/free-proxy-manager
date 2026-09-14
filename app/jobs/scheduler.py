@@ -62,7 +62,8 @@ class JobScheduler:
         logger.info("Background jobs stopped")
 
     async def _run_initial_cycle(self) -> None:
-        """Optionally collect on startup, then prime the checker queue."""
+        """Sync source flags, optionally collect on startup, then prime the checker queue."""
+        await asyncio.to_thread(self.collector_job.collector.sync_sources_from_config)
         if self.settings.collector_run_on_startup:
             await self.collector_job.run()
         else:

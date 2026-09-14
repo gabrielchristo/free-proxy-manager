@@ -44,7 +44,7 @@ SOURCES_CONFIG_PATH=./sources.json
 |-------|----------|-------------|
 | `name` | yes | Unique identifier (appears in logs inside `[ ]`) |
 | `type` | yes | `proxyscrape`, `text_list`, `geonode`, `proxycompass`, `litport`, `nodemaven`, or `proxydb` |
-| `enabled` | no | Default `true` |
+| `enabled` | no | Default `true`. When `false`, the source is not collected and existing proxies linked only to that source are not checked |
 | `url` | yes | Source URL |
 | `priority` | yes | Numeric priority (higher = more relevant in logs) |
 | `protocols` | proxyscrape, geonode | List of accepted protocols |

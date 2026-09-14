@@ -43,7 +43,7 @@ Consumer applications
 
 ### Checker queue fairness (each refill)
 
-Batch size is split across four status tiers (`limit ÷ 4`, remainder distributed). Within each tier, selection uses `CHECKER_SELECTION_POOL_SIZE` with **round-robin across providers**. Unused slots from a tier are redistributed to tiers that still have candidates. Queue order interleaves tiers round-robin.
+Batch size is split across four status tiers (`limit ÷ 4`, remainder distributed). Within each tier, selection uses `CHECKER_SELECTION_POOL_SIZE` with **round-robin across enabled providers** (`"enabled": true` in `sources.json`, synced to `proxy_sources.enabled`). Proxies linked only to disabled sources are excluded. Unused slots from a tier are redistributed to tiers that still have candidates. Queue order interleaves tiers round-robin.
 
 | Tier | Eligibility |
 |------|-------------|

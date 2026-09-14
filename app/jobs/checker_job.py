@@ -161,20 +161,26 @@ class CheckerJob:
         now = utc_now()
         recheck_due_cutoff = now - timedelta(seconds=self.settings.recheck_interval)
 
-        healthy_query = db.query(func.count(Proxy.id)).filter(
-            Proxy.status == ProxyStatus.HEALTHY,
-            (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
-            (Proxy.last_checked.is_(None)) | (Proxy.last_checked <= recheck_due_cutoff),
+        healthy_query = self._apply_checkable_filter(
+            db.query(func.count(Proxy.id)).filter(
+                Proxy.status == ProxyStatus.HEALTHY,
+                (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+                (Proxy.last_checked.is_(None)) | (Proxy.last_checked <= recheck_due_cutoff),
+            ),
+            db,
         )
         if exclude_ids:
             healthy_query = healthy_query.filter(~Proxy.id.in_(exclude_ids))
         healthy_due = int(healthy_query.scalar() or 0)
 
-        pending_query = db.query(func.count(Proxy.id)).filter(
-            Proxy.status.in_(
-                [ProxyStatus.NEW, ProxyStatus.DEGRADED, ProxyStatus.DEAD]
+        pending_query = self._apply_checkable_filter(
+            db.query(func.count(Proxy.id)).filter(
+                Proxy.status.in_(
+                    [ProxyStatus.NEW, ProxyStatus.DEGRADED, ProxyStatus.DEAD]
+                ),
+                (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
             ),
-            (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+            db,
         )
         if exclude_ids:
             pending_query = pending_query.filter(~Proxy.id.in_(exclude_ids))
@@ -201,10 +207,13 @@ class CheckerJob:
 
         def healthy_query():
             return filter_seen(
-                db.query(Proxy).filter(
-                    Proxy.status == ProxyStatus.HEALTHY,
-                    (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
-                    (Proxy.last_checked.is_(None)) | (Proxy.last_checked <= recheck_due_cutoff),
+                self._apply_checkable_filter(
+                    db.query(Proxy).filter(
+                        Proxy.status == ProxyStatus.HEALTHY,
+                        (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now),
+                        (Proxy.last_checked.is_(None)) | (Proxy.last_checked <= recheck_due_cutoff),
+                    ),
+                    db,
                 )
             )
 
@@ -214,7 +223,7 @@ class CheckerJob:
                 query = query.filter(
                     (Proxy.cooldown_until.is_(None)) | (Proxy.cooldown_until <= now)
                 )
-            return filter_seen(query)
+            return filter_seen(self._apply_checkable_filter(query, db))
 
         query_builders = [
             healthy_query,
@@ -291,6 +300,35 @@ class CheckerJob:
         return [row[0] for row in rows]
 
     @staticmethod
+    def _apply_checkable_filter(query, db: Session):
+        """Keep only proxies linked to at least one enabled source."""
+        enabled_ids = CheckerJob._enabled_source_ids(db)
+        if not enabled_ids:
+            return query.filter(False)
+
+        checkable_ids = (
+            db.query(ProxySourceLink.proxy_id)
+            .filter(ProxySourceLink.source_id.in_(enabled_ids))
+            .distinct()
+        )
+        return query.filter(Proxy.id.in_(checkable_ids))
+
+    @staticmethod
+    def _proxy_has_enabled_source(db: Session, proxy_id: int) -> bool:
+        enabled_ids = CheckerJob._enabled_source_ids(db)
+        if not enabled_ids:
+            return False
+        return (
+            db.query(ProxySourceLink.id)
+            .filter(
+                ProxySourceLink.proxy_id == proxy_id,
+                ProxySourceLink.source_id.in_(enabled_ids),
+            )
+            .first()
+            is not None
+        )
+
+    @staticmethod
     def _round_robin_proxy_rows(
         buckets: dict[int, list[tuple[int, datetime | None]]],
         limit: int,
@@ -347,8 +385,10 @@ class CheckerJob:
 
         pool_size = max(limit, self.settings.checker_selection_pool_size)
         source_ids = self._enabled_source_ids(db)
-        bucket_count = max(len(source_ids) + 1, 1)
-        per_source_pool = max(1, pool_size // bucket_count)
+        if not source_ids:
+            return []
+
+        per_source_pool = max(1, pool_size // max(len(source_ids), 1))
 
         buckets: dict[int, list[tuple[int, datetime | None]]] = {}
         for source_id in source_ids:
@@ -365,19 +405,6 @@ class CheckerJob:
                 shuffled = list(rows)
                 random.shuffle(shuffled)
                 buckets[source_id] = shuffled
-
-        linked_ids = db.query(ProxySourceLink.proxy_id).distinct().scalar_subquery()
-        unlinked_rows = (
-            query.filter(~Proxy.id.in_(linked_ids))
-            .with_entities(Proxy.id, Proxy.last_checked)
-            .order_by(Proxy.last_checked.asc().nullsfirst(), Proxy.id.asc())
-            .limit(per_source_pool)
-            .all()
-        )
-        if unlinked_rows:
-            shuffled = list(unlinked_rows)
-            random.shuffle(shuffled)
-            buckets[0] = shuffled
 
         if not buckets:
             return []
@@ -490,6 +517,12 @@ class CheckerJob:
         try:
             proxy = db.query(Proxy).filter(Proxy.id == proxy_id).one_or_none()
             if proxy is None:
+                return None
+            if not self._proxy_has_enabled_source(db, proxy_id):
+                logger.debug(
+                    "Skipping proxy_id=%s check — no link to an enabled source",
+                    proxy_id,
+                )
                 return None
 
             source_label = self._resolve_source_label(db, proxy_id)
