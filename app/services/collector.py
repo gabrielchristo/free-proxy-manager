@@ -8,8 +8,13 @@ from app.config import Settings, get_settings
 from app.datetime_utils import as_utc, utc_now
 from app.database import SessionLocal
 from app.models import Proxy, ProxySource, ProxySourceLink, ProxyStatus
+from app.protocols import (
+    collection_batch_key,
+    merge_collected_protocol,
+    normalize_protocol,
+)
 from app.services.collector_helpers import apply_collected_fields, build_source_metadata
-from app.services.proxy_identity import prefer_protocol, proxy_identity
+from app.services.proxy_identity import proxy_identity
 from app.sources.base import CollectedProxy, ProxySourceBase
 from app.sources.config import load_sources_config
 from app.sources.loader import load_sources, resolve_sources_config_path
@@ -170,6 +175,18 @@ class CollectorService:
             or 0
         )
 
+    @staticmethod
+    def _find_existing_proxy(
+        db: Session,
+        host: str,
+        port: int,
+        protocol: str,
+    ) -> Proxy | None:
+        query = db.query(Proxy).filter(Proxy.host == host, Proxy.port == port)
+        if protocol in {"http", "https"}:
+            return query.filter(Proxy.protocol.in_(["http", "https"])).one_or_none()
+        return query.filter(Proxy.protocol == protocol).one_or_none()
+
     def _persist_collected(
         self,
         db: Session,
@@ -179,28 +196,29 @@ class CollectorService:
     ) -> list[int]:
         now = utc_now()
         queued_ids: list[int] = []
-        seen: set[tuple[str, int]] = set()
+        seen: set[tuple[str, str, int]] = set()
         batch_size = self.settings.collector_persist_batch_size
         since_commit = 0
 
         for item in collected:
+            protocol = normalize_protocol(item.protocol)
+            if protocol is None:
+                continue
+
             host, port = proxy_identity(item.host, item.port)
             if not host:
                 continue
-            key = (host, port)
-            if key in seen:
-                continue
-            seen.add(key)
 
-            protocol = item.protocol.lower()
-            proxy = (
-                db.query(Proxy)
-                .filter(
-                    Proxy.host == host,
-                    Proxy.port == port,
-                )
-                .one_or_none()
-            )
+            key = collection_batch_key(protocol, item.host, item.port)
+            if key is None:
+                continue
+            if key in seen:
+                if key[0] != "http-like":
+                    continue
+            else:
+                seen.add(key)
+
+            proxy = self._find_existing_proxy(db, host, port, protocol)
 
             is_new = proxy is None
             if proxy is None:
@@ -219,7 +237,7 @@ class CollectorService:
                 )
             else:
                 proxy.last_seen = now
-                preferred = prefer_protocol(proxy.protocol, protocol)
+                preferred = merge_collected_protocol(proxy.protocol, protocol)
                 if preferred != proxy.protocol:
                     proxy.protocol = preferred
 

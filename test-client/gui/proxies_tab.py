@@ -42,7 +42,7 @@ class ProxiesTab(QWidget):
         grid.setVerticalSpacing(8)
 
         self.protocol = QComboBox()
-        self.protocol.addItems(["", "http", "https"])
+        self.protocol.addItems(["", "http", "https", "socks4", "socks5"])
         self.status = QComboBox()
         self.status.addItems(
             ["", "HEALTHY", "DEGRADED", "DEAD", "NEW", "CHECKING", "DISABLED"]

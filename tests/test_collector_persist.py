@@ -85,6 +85,14 @@ def test_proxy_connect_url_uses_http_for_https_tagged_proxies():
     assert service.proxy_connect_url("1.2.3.4", 8080, "http") == "http://1.2.3.4:8080"
 
 
+def test_proxy_connect_url_keeps_socks_scheme():
+    settings = get_settings().model_copy(update={"check_https_proxy_as_http": True})
+    service = CheckerService(settings)
+
+    assert service.proxy_connect_url("1.2.3.4", 1080, "socks5") == "socks5://1.2.3.4:1080"
+    assert service.proxy_connect_url("1.2.3.4", 1080, "socks4") == "socks4://1.2.3.4:1080"
+
+
 def test_proxy_connect_url_keeps_https_when_disabled():
     settings = get_settings().model_copy(update={"check_https_proxy_as_http": False})
     service = CheckerService(settings)

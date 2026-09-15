@@ -31,7 +31,26 @@ def test_nodemaven_parse_item_maps_https_protocol():
     assert collected.source_latency_ms == 4102.0
 
 
-def test_nodemaven_parse_item_skips_socks():
+def test_nodemaven_parse_item_maps_socks5_when_supported():
+    source = NodeMavenSource(
+        name="nodemaven",
+        url="https://freeproxies.nodemaven.com/proxies",
+        priority=65,
+        fetch_timeout=30,
+        supported_protocols=frozenset({"socks5"}),
+    )
+    seen: set[tuple[str, str, int]] = set()
+
+    collected = source._parse_item(
+        {"ip_address": "1.2.3.4", "port": "8080", "protocol": "SOCKS5"},
+        seen,
+    )
+
+    assert collected is not None
+    assert collected.protocol == "socks5"
+
+
+def test_nodemaven_parse_item_skips_socks_when_unsupported():
     source = NodeMavenSource(
         name="nodemaven",
         url="https://freeproxies.nodemaven.com/proxies",

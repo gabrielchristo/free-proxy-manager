@@ -57,7 +57,7 @@ class ProxySource(Base):
 class Proxy(Base):
     __tablename__ = "proxies"
     __table_args__ = (
-        UniqueConstraint("host", "port", name="uq_proxy_identity"),
+        UniqueConstraint("protocol", "host", "port", name="uq_proxy_identity"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

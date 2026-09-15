@@ -93,6 +93,8 @@ class StatsResponse(BaseModel):
     pool: ProxyPoolStats
     http: int
     https: int
+    socks4: int
+    socks5: int
     average_latency: float | None = None
     success_rate: float | None = None
     proxies_by_country: dict[str, int] = Field(default_factory=dict)

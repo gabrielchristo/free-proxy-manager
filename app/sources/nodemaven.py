@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 PROTOCOL_MAP = {
     "http": "http",
     "https": "https",
+    "socks4": "socks4",
+    "socks5": "socks5",
 }
 
 ANONYMITY_MAP = {

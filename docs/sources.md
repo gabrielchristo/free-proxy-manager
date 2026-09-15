@@ -47,8 +47,8 @@ SOURCES_CONFIG_PATH=./sources.json
 | `enabled` | no | Default `true`. When `false`, the source is not collected and existing proxies linked only to that source are not checked |
 | `url` | yes | Source URL |
 | `priority` | yes | Numeric priority (higher = more relevant in logs) |
-| `protocols` | proxyscrape, geonode | List of accepted protocols |
-| `protocol` | text_list | Single protocol (`http` or `https`) |
+| `protocols` | proxyscrape, geonode | List of accepted protocols (`http`, `https`, `socks4`, `socks5`) |
+| `protocol` | text_list | Single protocol (`http`, `https`, `socks4`, or `socks5`) |
 | `page_size` | geonode, litport, nodemaven | Items per API page (defaults: geonode `100`, litport `500`, nodemaven `500`) |
 | `max_pages` | geonode, litport, nodemaven, proxydb | Maximum paginated pages (defaults: geonode/litport/nodemaven `10`, proxydb `20`) |
 | `download_url` | proxycompass | AJAX endpoint override (default `/wp-admin/admin-ajax.php`) |
@@ -158,7 +158,7 @@ Country/city metadata comes from `geolocation.country` / `geolocation.city`.
 
 The page https://nodemaven.com/free-proxy-list/ loads data from a Flask backend at `https://freeproxies.nodemaven.com/proxies`.
 
-Paginates with `page` / `per_page`. Maps `HTTPS` → `https` and ignores SOCKS4/SOCKS5.
+Paginates with `page` / `per_page`. Maps `HTTPS`/`SOCKS4`/`SOCKS5` to canonical lowercase protocols.
 
 Example:
 

@@ -154,6 +154,12 @@ class PoolService:
         https_count = (
             db.query(func.count(Proxy.id)).filter(Proxy.protocol == "https").scalar() or 0
         )
+        socks4_count = (
+            db.query(func.count(Proxy.id)).filter(Proxy.protocol == "socks4").scalar() or 0
+        )
+        socks5_count = (
+            db.query(func.count(Proxy.id)).filter(Proxy.protocol == "socks5").scalar() or 0
+        )
 
         avg_latency = (
             db.query(func.avg(Proxy.latency_ms))
@@ -215,6 +221,8 @@ class PoolService:
             pool=pool,
             http=http_count,
             https=https_count,
+            socks4=socks4_count,
+            socks5=socks5_count,
             average_latency=round(avg_latency, 2) if avg_latency is not None else None,
             success_rate=round(success_rate, 2) if success_rate is not None else None,
             proxies_by_country=proxies_by_country,

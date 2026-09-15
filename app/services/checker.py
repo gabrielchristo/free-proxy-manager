@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.config import Settings, get_settings
+from app.protocols import SOCKS_PROTOCOLS, normalize_protocol
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +52,14 @@ class ProxyTransportPool:
                 _, evicted = self._entries.popitem(last=False)
                 await evicted.aclose()
 
-            transport = httpx.AsyncHTTPTransport(
-                proxy=proxy_url,
-                verify=self._verify,
-                limits=self._limits,
-            )
+            try:
+                transport = httpx.AsyncHTTPTransport(
+                    proxy=proxy_url,
+                    verify=self._verify,
+                    limits=self._limits,
+                )
+            except ValueError as exc:
+                raise ValueError(f"unsupported proxy URL {proxy_url!r}: {exc}") from exc
             self._entries[proxy_url] = transport
             return transport
 
@@ -142,7 +146,9 @@ class CheckerService:
 
     def proxy_connect_url(self, host: str, port: int, protocol: str) -> str:
         """Build the proxy URL used for HTTP checks."""
-        connect_protocol = protocol.lower()
+        connect_protocol = normalize_protocol(protocol)
+        if connect_protocol is None:
+            raise ValueError(f"Unsupported proxy protocol: {protocol}")
         if self.settings.check_https_proxy_as_http and connect_protocol == "https":
             connect_protocol = "http"
         return f"{connect_protocol}://{host}:{port}"
@@ -155,6 +161,22 @@ class CheckerService:
     ) -> CheckResult:
         """Probe one proxy against the configured check URL."""
         check_url = self.validate_check_url()
+        protocol_norm = normalize_protocol(protocol)
+        if protocol_norm is None:
+            return CheckResult(success=False, error=f"unsupported proxy protocol: {protocol}")
+        if protocol_norm in SOCKS_PROTOCOLS:
+            from app.services.socks_checker import check_socks_proxy
+
+            return await check_socks_proxy(
+                protocol=protocol_norm,
+                proxy_host=host,
+                proxy_port=port,
+                check_url=check_url,
+                timeout=self.settings.check_timeout,
+                success_status_min=self.settings.check_success_status_min,
+                success_status_max=self.settings.check_success_status_max,
+            )
+
         proxy_url = self.proxy_connect_url(host, port, protocol)
         started = datetime.now(UTC)
 
@@ -188,6 +210,8 @@ class CheckerService:
 
         try:
             response = await client.get(check_url, **request_kwargs)
+        except ValueError as exc:
+            return CheckResult(success=False, error=str(exc))
         except httpx.ProxyError as exc:
             message = str(exc)
             requires_auth = "407" in message or "authentication" in message.lower()

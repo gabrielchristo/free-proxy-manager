@@ -16,7 +16,7 @@ Only `HEALTHY` status (outside cooldown). `DEGRADED` proxies are not returned fr
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `protocol` | string | `http` or `https` |
+| `protocol` | string | `http`, `https`, `socks4`, or `socks5` |
 | `country` | string | Partial filter by country name |
 | `country_code` | string | ISO-3166 alpha-2 code (e.g. `BR`) |
 | `max_latency` | float | Maximum latency in ms |
@@ -85,6 +85,8 @@ All params from `/proxy`, plus:
 ## GET /stats
 
 Aggregated pool, protocol, latency, country, and source statistics.
+
+Response includes per-protocol counts: `http`, `https`, `socks4`, `socks5`.
 
 Each source includes:
 

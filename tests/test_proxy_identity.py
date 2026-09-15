@@ -119,5 +119,30 @@ def test_persist_collected_deduplicates_normalized_hosts(db_session):
     assert rows[0].host == "10.0.0.1"
 
 
+def test_persist_collected_keeps_socks_separate_from_http(db_session):
+    source = ProxySource(
+        name="socks-dedup",
+        url="https://example.com/list",
+        enabled=True,
+        priority=50,
+    )
+    db_session.add(source)
+    db_session.commit()
+    source_id = source.id
+
+    service = CollectorService(settings=get_settings())
+    items = [
+        CollectedProxy(host="10.0.0.1", port=1080, protocol="http"),
+        CollectedProxy(host="10.0.0.1", port=1080, protocol="socks5"),
+        CollectedProxy(host="10.0.0.1", port=1080, protocol="socks4"),
+    ]
+
+    service._persist_collected(db_session, source_id, "socks-dedup", items)
+
+    rows = db_session.query(Proxy).order_by(Proxy.protocol).all()
+    assert len(rows) == 3
+    assert [row.protocol for row in rows] == ["http", "socks4", "socks5"]
+
+
 def test_proxy_identity_returns_normalized_pair():
     assert proxy_identity("010.000.000.001", 8080) == ("10.0.0.1", 8080)

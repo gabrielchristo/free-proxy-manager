@@ -7,7 +7,7 @@
       "enabled": true,
       "url": "https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/all/data.json",
       "priority": 100,
-      "protocols": ["http", "https"]
+      "protocols": ["http", "https", "socks4", "socks5"]
     },
     {
       "name": "iplocate-http",
@@ -31,7 +31,7 @@
       "enabled": true,
       "url": "https://proxylist.geonode.com/api/proxy-list",
       "priority": 85,
-      "protocols": ["http", "https"],
+      "protocols": ["http", "https", "socks4", "socks5"],
       "page_size": 50,
       "max_pages": 10
     },
@@ -41,7 +41,7 @@
       "enabled": true,
       "url": "https://proxycompass.com/?page_id=455912",
       "priority": 80,
-      "protocols": ["http", "https"]
+      "protocols": ["http", "https", "socks4", "socks5"]
     },
     {
       "name": "proxifly-http",
@@ -60,12 +60,28 @@
       "protocols": ["https"]
     },
     {
+      "name": "proxifly-socks4",
+      "type": "proxyscrape",
+      "enabled": true,
+      "url": "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/socks4/data.json",
+      "priority": 73,
+      "protocols": ["socks4"]
+    },
+    {
+      "name": "proxifly-socks5",
+      "type": "proxyscrape",
+      "enabled": true,
+      "url": "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/socks5/data.json",
+      "priority": 72,
+      "protocols": ["socks5"]
+    },
+    {
       "name": "litport",
       "type": "litport",
       "enabled": true,
       "url": "https://litport.net/api/free-proxy",
       "priority": 70,
-      "protocols": ["http", "https"],
+      "protocols": ["http", "https", "socks4", "socks5"],
       "page_size": 500,
       "max_pages": 5
     },
@@ -75,7 +91,7 @@
       "enabled": false,
       "url": "https://freeproxies.nodemaven.com/proxies",
       "priority": 65,
-      "protocols": ["http", "https"],
+      "protocols": ["http", "https", "socks4", "socks5"],
       "page_size": 1000,
       "max_pages": 5
     },
@@ -85,7 +101,7 @@
       "enabled": true,
       "url": "https://proxydb.net/",
       "priority": 60,
-      "protocols": ["http", "https"],
+      "protocols": ["http", "https", "socks4", "socks5"],
       "max_pages": 15
     }
   ]
