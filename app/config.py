@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     scorer_https_bonus: float = Field(ge=0.0)
     scorer_https_protocol: str
     scorer_multi_source_bonus: float = Field(ge=0.0)
+    scorer_multi_source_cap: float = Field(ge=0.0)
     scorer_anonymity_bonus: Annotated[dict[str, float], NoDecode]
 
     @field_validator("scorer_anonymity_bonus", mode="before")

@@ -36,7 +36,10 @@ class ScorerService:
         )
         multi_source_bonus = 0.0
         if source_count > 1:
-            multi_source_bonus = (source_count - 1) * self.settings.scorer_multi_source_bonus
+            multi_source_bonus = min(
+                (source_count - 1) * self.settings.scorer_multi_source_bonus,
+                self.settings.scorer_multi_source_cap,
+            )
         anonymity_bonus = self._anonymity_bonus(proxy)
 
         score = (

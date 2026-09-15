@@ -2,6 +2,7 @@ import pytest
 from datetime import datetime
 
 from app.config import get_settings
+from app.datetime_utils import utc_now
 from app.services.checker import CheckerService
 from app.services.scorer import ScorerService
 from app.models import Proxy, ProxyStatus
@@ -99,7 +100,48 @@ def test_scorer_adds_bonus_for_multiple_sources():
     single_source_score = scorer.calculate(proxy, source_count=1)
     multi_source_score = scorer.calculate(proxy, source_count=3)
 
-    assert multi_source_score == single_source_score + (2 * settings.scorer_multi_source_bonus)
+    assert multi_source_score == single_source_score + min(
+        2 * settings.scorer_multi_source_bonus,
+        settings.scorer_multi_source_cap,
+    )
+
+
+def test_scorer_perfect_proxy_never_exceeds_99():
+    settings = get_settings().model_copy(
+        update={
+            "scorer_success_weight": 34,
+            "scorer_latency_max": 30,
+            "scorer_recency_max": 11,
+            "scorer_history_cap": 9,
+            "scorer_score_max": 99,
+            "scorer_https_bonus": 5,
+            "scorer_multi_source_bonus": 2,
+            "scorer_multi_source_cap": 4,
+            "scorer_anonymity_bonus": {
+                "transparent": 0,
+                "anonymous": 3,
+                "elite": 6,
+                "high_anonymous": 6,
+            },
+        }
+    )
+    scorer = ScorerService(settings)
+    perfect = Proxy(
+        host="1.1.1.1",
+        port=8080,
+        protocol=settings.scorer_https_protocol,
+        status=ProxyStatus.HEALTHY,
+        success_count=100,
+        failure_count=0,
+        consecutive_failures=0,
+        latency_ms=0,
+        anonymity="elite",
+        last_success=utc_now(),
+    )
+
+    assert scorer.calculate(perfect, source_count=1) <= 99
+    assert scorer.calculate(perfect, source_count=50) <= 99
+    assert scorer.calculate(perfect, source_count=50) == pytest.approx(99)
 
 
 def test_scorer_prefers_higher_anonymity_levels():

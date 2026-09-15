@@ -81,7 +81,7 @@ The formula lives in `app/services/scorer.py` and considers:
 - recency of last success;
 - success history;
 - HTTPS bonus (`SCORER_HTTPS_BONUS`);
-- multi-source bonus (`SCORER_MULTI_SOURCE_BONUS` × extra sources);
+- multi-source bonus (`SCORER_MULTI_SOURCE_BONUS` × extra sources, capped by `SCORER_MULTI_SOURCE_CAP`);
 - anonymity level bonus (`SCORER_ANONYMITY_BONUS`, e.g. `elite` > `anonymous` > `transparent`);
 - consecutive failure penalty.
 

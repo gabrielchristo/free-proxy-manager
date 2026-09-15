@@ -111,11 +111,12 @@ Rough tuning: with 4 KB pages, `DB_WAL_AUTOCHECKPOINT=25` allows ~100 KB in the 
 | `SCORER_RECENCY_MAX` | Maximum recency bonus |
 | `SCORER_FAILURE_PENALTY` | Consecutive failure penalty |
 | `SCORER_HISTORY_CAP` | History bonus cap |
-| `SCORER_SCORE_MAX` | Maximum score |
+| `SCORER_SCORE_MAX` | Maximum score (default 99) |
 | `SCORER_HTTPS_BONUS` | Extra bonus for HTTPS proxies |
 | `SCORER_HTTPS_PROTOCOL` | `protocol` value that receives the bonus |
 | `SCORER_MULTI_SOURCE_BONUS` | Bonus per extra source beyond the first |
-| `SCORER_ANONYMITY_BONUS` | Comma-separated `level=bonus` map (e.g. `transparent=0,anonymous=6,elite=12`) |
+| `SCORER_MULTI_SOURCE_CAP` | Maximum total multi-source bonus |
+| `SCORER_ANONYMITY_BONUS` | Comma-separated `level=bonus` map (e.g. `transparent=0,anonymous=3,elite=6`) |
 
 ## Docker Compose
 
