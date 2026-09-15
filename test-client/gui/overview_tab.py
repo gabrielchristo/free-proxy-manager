@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import (
+    QCheckBox,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -13,6 +14,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -20,7 +22,7 @@ from PyQt5.QtWidgets import (
 )
 
 from client_lib.api import fetch_health, fetch_stats
-from client_lib.models import iso_value
+from client_lib.models import OVERVIEW_AUTO_REFRESH_SECONDS, iso_value
 from gui.workers import AsyncWorker
 
 POOL_FIELDS = [
@@ -61,11 +63,23 @@ class OverviewTab(QWidget):
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setObjectName("primaryButton")
         self.refresh_button.clicked.connect(self.refresh)
+        self.auto_refresh = QCheckBox("Auto refresh")
+        self.refresh_seconds = QSpinBox()
+        self.refresh_seconds.setRange(1, 360)
+        self.refresh_seconds.setValue(OVERVIEW_AUTO_REFRESH_SECONDS)
+        self.refresh_seconds.setSuffix(" s")
         self.status_label = QLabel("Click Refresh to load /health and /stats")
         self.status_label.setObjectName("statusLabel")
         actions.addWidget(self.refresh_button)
+        actions.addWidget(self.auto_refresh)
+        actions.addWidget(self.refresh_seconds)
         actions.addWidget(self.status_label, stretch=1)
         root.addLayout(actions)
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.refresh)
+        self.auto_refresh.toggled.connect(self._toggle_auto_refresh)
+        self.refresh_seconds.valueChanged.connect(self._reset_timer_interval)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -139,6 +153,17 @@ class OverviewTab(QWidget):
             grid.addWidget(label, row, col * 2)
             grid.addWidget(value, row, col * 2 + 1)
         return grid
+
+    def _toggle_auto_refresh(self, enabled: bool) -> None:
+        if enabled:
+            self._reset_timer_interval()
+            self.timer.start()
+        else:
+            self.timer.stop()
+
+    def _reset_timer_interval(self) -> None:
+        if self.auto_refresh.isChecked():
+            self.timer.setInterval(self.refresh_seconds.value() * 1000)
 
     def refresh(self) -> None:
         if self.worker and self.worker.isRunning():
